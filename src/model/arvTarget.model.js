@@ -1,57 +1,72 @@
 import mongoose, { Schema } from "mongoose";
+import { Notification } from "./notification.model";
 
 const ARVTargetSchema = new Schema(
   {
     code: {
       type: String,
-      unique: true
+      unique: true,
     },
     eventName: {
-      type: String
+      type: String,
     },
     eventDescription: {
-      type: String
+      type: String,
     },
     revealTime: {
-      type: Date
+      type: Date,
     },
     outcomeTime: {
-      type: Date
+      type: Date,
     },
     bufferTime: {
-      type: Date
+      type: Date,
     },
     gameTime: {
       type: Date,
     },
-    image1: { url: { type: String, required: true }, description: { type: String, required: true } },
-    image2: { url: { type: String, required: true }, description: { type: String, required: true } },
-    image3: { url: { type: String, required: true }, description: { type: String, required: true } },
+    image1: {
+      url: { type: String, required: true },
+      description: { type: String, required: true },
+    },
+    image2: {
+      url: { type: String, required: true },
+      description: { type: String, required: true },
+    },
+    image3: {
+      url: { type: String, required: true },
+      description: { type: String, required: true },
+    },
     controlImage: {
-      type: String
+      type: String,
     },
     resultImage: {
       type: String,
-      default: ""
+      default: "",
     },
     isActive: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isPartiallyActive: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isQueued: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isCompleted: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
   { timestamps: true }
-)
+);
+ARVTargetSchema.post("findOneAndUpdate", async function (doc) {
+  if (doc.isCompleted) {
+    await Notification.deleteMany({ targetCode: doc.code });
+  }
+});
 
 export const ARVTarget = mongoose.model("ARVTarget", ARVTargetSchema);
