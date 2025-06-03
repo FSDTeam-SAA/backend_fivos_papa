@@ -1,44 +1,50 @@
 import mongoose, { Schema } from "mongoose";
+import { Notification } from "./notification.model.js";
 
 const TMCTargetSchema = new Schema(
   {
     code: {
       type: String,
-      unique: true
+      unique: true,
     },
     targetImage: {
-      type: String
+      type: String,
     },
     controlImages: [
       {
-        type: String
+        type: String,
       },
     ],
     revealTime: { type: Date },
     bufferTime: {
-      type: Date
+      type: Date,
     },
     gameTime: {
       type: Date,
     },
     isActive: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isPartiallyActive: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isQueued: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isCompleted: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
   { timestamps: true }
-)
+);
 
+TMCTargetSchema.post("findOneAndUpdate", async function (doc) {
+  if (doc.isCompleted) {
+    await Notification.deleteMany({ targetCode: doc.code });
+  }
+});
 export const TMCTarget = mongoose.model("TMCTarget", TMCTargetSchema);
