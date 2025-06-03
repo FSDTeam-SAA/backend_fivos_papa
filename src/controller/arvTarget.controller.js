@@ -129,17 +129,17 @@ export const getAllQueuedARVTargets = async (req, res, next) => {
 }
 
 export const getAllUnQueuedARVTargets = async (req, res, next) => {
-
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
+    const sort = req.query.sort || '-createdAt'; // Default sort by newest
 
     try {
-
         const [totalItems, ARVTargets] = await Promise.all([
             ARVTarget.countDocuments({ isQueued: false, isActive: false, isPartiallyActive: false }),
             ARVTarget.find({ isQueued: false, isActive: false, isPartiallyActive: false })
                 .select("-__v")
+                .sort(sort)  // Add sorting
                 .skip(skip)
                 .limit(limit)
         ]);
@@ -157,9 +157,7 @@ export const getAllUnQueuedARVTargets = async (req, res, next) => {
             },
             message: "All unqueued ARVTargets fetched successfully"
         });
-    }
-
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 }

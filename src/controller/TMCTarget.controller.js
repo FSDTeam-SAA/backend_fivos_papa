@@ -129,39 +129,37 @@ export const getAllQueuedTMCTargets = async (req, res, next) => {
 };
 
 export const getAllUnQueuedTMCTargets = async (req, res, next) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const sort = req.query.sort || '-createdAt'; // Default sort by newest
 
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const skip = (page - 1) * limit;
+    try {
+        const [totalItems, TMCTargets] = await Promise.all([
+            TMCTarget.countDocuments({ isQueued: false, isActive: false }),
+            TMCTarget.find({ isQueued: false, isActive: false })
+                .select("-__v")
+                .sort(sort)  // Add sorting
+                .skip(skip)
+                .limit(limit)
+        ]);
 
-  try {
+        const totalPages = Math.ceil(totalItems / limit);
 
-    const [totalItems, TMCTargets] = await Promise.all([
-      TMCTarget.countDocuments({ isQueued: false, isActive: false, isPartiallyActive: false }),
-      TMCTarget.find({ isQueued: false, isActive: false, isPartiallyActive: false })
-        .select("-__v")
-        .skip(skip)
-        .limit(limit)
-    ]);
-
-    const totalPages = Math.ceil(totalItems / limit);
-
-    return res.status(200).json({
-      status: true,
-      data: TMCTargets,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalItems,
-        itemsPerPage: limit
-      },
-      message: "All unqueued TMCTargets fetched successfully"
-    });
-  }
-
-  catch (error) {
-    next(error);
-  }
+        return res.status(200).json({
+            status: true,
+            data: TMCTargets,
+            pagination: {
+                currentPage: page,
+                totalPages,
+                totalItems,
+                itemsPerPage: limit
+            },
+            message: "All unqueued TMC Targets fetched successfully"
+        });
+    } catch (error) {
+        next(error);
+    }
 };
 
 export const getActiveTMCTarget = async (_, res, next) => {
