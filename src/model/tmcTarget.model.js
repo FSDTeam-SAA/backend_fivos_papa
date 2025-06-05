@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { Notification } from "./notification.model.js";
+import { Notification } from "../model/notification.model.js";
 
 const TMCTargetSchema = new Schema(
   {
@@ -43,8 +43,9 @@ const TMCTargetSchema = new Schema(
 );
 
 TMCTargetSchema.post("findOneAndUpdate", async function (doc) {
-  if (doc.isCompleted) {
+  if (doc && doc.isCompleted) {
     await Notification.deleteMany({ targetCode: doc.code });
   }
 });
+
 export const TMCTarget = mongoose.model("TMCTarget", TMCTargetSchema);

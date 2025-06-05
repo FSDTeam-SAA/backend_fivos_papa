@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { Notification } from "./notification.model";
+import { Notification } from "../model/notification.model.js";
 
 const ARVTargetSchema = new Schema(
   {
@@ -63,8 +63,9 @@ const ARVTargetSchema = new Schema(
   },
   { timestamps: true }
 );
+
 ARVTargetSchema.post("findOneAndUpdate", async function (doc) {
-  if (doc.isCompleted) {
+  if (doc && doc.isCompleted) {
     await Notification.deleteMany({ targetCode: doc.code });
   }
 });
