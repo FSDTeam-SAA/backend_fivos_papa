@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { generateAccessAndRefreshTokens } from "../controller/user.controller.js";
 import { User } from "../model/user.model.js";
-import { sendMail } from "../utils/email.util.js";
+import { sendMail, sendContactReply } from "../utils/email.util.js";
 import { generateOTP } from "../utils/otp.util.js";
 import { ContactUs } from "../model/contactUs.model.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
@@ -13,7 +13,9 @@ const adminLogin = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await User.findOne({ email, role: "admin" }).select("-tierRank -point -totalPoints -TMCSuccessRate -TMCpValue -ARVSuccessRate -ARVpValue -sessions -challengeHistory -totalPoints -tmcScore -arvScore -combinedScore -leaderboardPosition -completedTargets -successRate -emailVerified -role -refreshToken -otpExpiration -createdAt -updatedAt -__v");
+    const user = await User.findOne({ email, role: "admin" }).select(
+      "-tierRank -point -totalPoints -TMCSuccessRate -TMCpValue -ARVSuccessRate -ARVpValue -sessions -challengeHistory -totalPoints -tmcScore -arvScore -combinedScore -leaderboardPosition -completedTargets -successRate -emailVerified -role -refreshToken -otpExpiration -createdAt -updatedAt -__v"
+    );
     if (!user) {
       return res
         .status(404)
@@ -189,7 +191,9 @@ const updateAdminProfile = async (req, res, next) => {
     const adminId = req.user._id;
     const { fullName, screenName, phoneNumber, country, city } = req.body;
 
-    const admin = await User.findOne({ _id: adminId, role: "admin" }).session(session);
+    const admin = await User.findOne({ _id: adminId, role: "admin" }).session(
+      session
+    );
     if (!admin) {
       await session.abortTransaction();
       session.endSession();
@@ -246,7 +250,6 @@ const getAdminProfile = async (req, res) => {
   } catch (error) {
     console.error("Error getting admin profile:", error);
     return res.status(500).json({ status: false, message: error.message });
-
   }
 };
 
@@ -254,20 +257,32 @@ const getAdminProfile = async (req, res) => {
 export const getProfileCompleteness = async (req, res) => {
   try {
     const userId = req.user._id;
-    const profile = await User.findById(userId).select('screenName fullName phoneNumber country city');
+    const profile = await User.findById(userId).select(
+      "screenName fullName phoneNumber country city"
+    );
 
     if (!profile) {
-      return res.status(404).json({ message: 'User profile not found' });
+      return res.status(404).json({ message: "User profile not found" });
     }
 
-    const fieldsToCheck = ['screenName', 'fullName', 'phoneNumber', 'country', 'city'];
-    const completedFields = fieldsToCheck.filter(field => !!profile[field]).length;
-    const completeness = Math.round((completedFields / fieldsToCheck.length) * 100);
+    const fieldsToCheck = [
+      "screenName",
+      "fullName",
+      "phoneNumber",
+      "country",
+      "city",
+    ];
+    const completedFields = fieldsToCheck.filter(
+      (field) => !!profile[field]
+    ).length;
+    const completeness = Math.round(
+      (completedFields / fieldsToCheck.length) * 100
+    );
 
     return res.status(200).json({ completeness });
   } catch (error) {
-    console.error('Error:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -435,18 +450,22 @@ const getActiveUsersCount = async (_, res, next) => {
             { lastActive: { $gte: new Date(Date.now() - activeThreshold) } },
             {
               $and: [
-                { 'sessions.sessionStartTime': { $gte: new Date(Date.now() - activeThreshold) } },
-                { 'sessions.sessionEndTime': { $exists: false } }
-              ]
-            }
-          ]
-        }
+                {
+                  "sessions.sessionStartTime": {
+                    $gte: new Date(Date.now() - activeThreshold),
+                  },
+                },
+                { "sessions.sessionEndTime": { $exists: false } },
+              ],
+            },
+          ],
+        },
       },
       {
         $project: {
-          _id: 1
-        }
-      }
+          _id: 1,
+        },
+      },
     ]);
 
     return res.status(200).json({
@@ -495,11 +514,9 @@ const getContactUs = async (req, res, next) => {
     return res.status(200).json({
       status: true,
       message: "Fetched contact us",
-      data: contactUs
+      data: contactUs,
     });
-  }
-
-  catch (error) {
+  } catch (error) {
     next(error);
   }
 };
@@ -518,11 +535,40 @@ const deleteContactUs = async (req, res, next) => {
 
     return res.status(200).json({
       status: true,
-      message: "Contact us deleted successfully"
+      message: "Contact us deleted successfully",
     });
+  } catch (error) {
+    next(error);
   }
+};
 
-  catch (error) {
+const replyContactUs = async (req, res, next) => {
+  const { id } = req.params;
+  const { replyMessage } = req.body;
+
+  try {
+    const contactUs = await ContactUs.findById(id);
+
+    if (!contactUs) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Contact us not found" });
+    }
+
+    await sendContactReply(contactUs.email, contactUs.name, replyMessage);
+
+    // Update the contact us entry to mark it as replied
+    contactUs.replied = true;
+    contactUs.replyMessage = replyMessage;
+    contactUs.replySubject = "Reply to your contact us submission";
+    await contactUs.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Reply sent successfully",
+    });
+  } catch (error) {
+    console.error("Error replying to contact us:", error);
     next(error);
   }
 };
@@ -533,8 +579,8 @@ export const getGameParticipationStats = async (req, res) => {
     const months = [];
 
     for (let i = 0; i < 12; i++) {
-      const monthStart = moment(now).month(i).startOf('month');
-      const monthEnd = moment(now).month(i).endOf('month');
+      const monthStart = moment(now).month(i).startOf("month");
+      const monthEnd = moment(now).month(i).endOf("month");
 
       // Count TMC participations by month
       const tmcParticipations = await UserSubmission.aggregate([
@@ -548,8 +594,8 @@ export const getGameParticipationStats = async (req, res) => {
           },
         },
         {
-          $count: "totalParticipations"
-        }
+          $count: "totalParticipations",
+        },
       ]);
 
       // Count ARV participations by month
@@ -564,8 +610,8 @@ export const getGameParticipationStats = async (req, res) => {
           },
         },
         {
-          $count: "totalParticipations"
-        }
+          $count: "totalParticipations",
+        },
       ]);
 
       months.push({
@@ -597,5 +643,6 @@ export {
   getContactUs,
   getAdminProfile,
   getAllContactUs,
-  deleteContactUs
+  deleteContactUs,
+  replyContactUs,
 };
