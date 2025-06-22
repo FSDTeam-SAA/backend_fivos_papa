@@ -8,18 +8,40 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const sendMail = async (email, otp) => {
+export const sendMail = async (email, subject, text, html) => {
   try {
     await transporter.sendMail({
       from: process.env.NODEMAILER_EMAIL,
       to: email,
-      subject: "Password Reset OTP",
-      text: `Your OTP is: ${otp}`,
+      subject,
+      text,
+      html,
     });
   } catch (error) {
     console.error("Error sending email:", error);
-    throw new Error("Failed to send OTP email");
+    throw new Error("Failed to send email");
   }
 };
 
-export { sendMail };
+export const sendOTP = async (email, otp) => {
+  return sendMail(
+    email,
+    "Password Reset OTP",
+    `Your OTP is: ${otp}`,
+    `<p>Your OTP is: <strong>${otp}</strong></p>`
+  );
+};
+
+export const sendContactReply = async (email, name, replyMessage) => {
+  return sendMail(
+    email,
+    "Reply to your contact us submission",
+    `Dear ${name},\n\nThank you for contacting us. Here is our response:\n\n${replyMessage}\n\nBest regards,\nThe Support Team`,
+    `<p>Dear ${name},</p>
+     <p>Thank you for contacting us. Here is our response:</p>
+     <p>${replyMessage}</p>
+     <p>Best regards,<br/>The Support Team</p>`
+  );
+};
+
+export default transporter;
