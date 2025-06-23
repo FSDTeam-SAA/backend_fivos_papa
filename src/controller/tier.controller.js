@@ -38,15 +38,6 @@ export const getNextUserTierInfo = async (req, res, next) => {
     const prevTier = tierTable[currentIndex - 1];
     const nextTier = tierTable[currentIndex + 1];
 
-    const pointsToNextTier =
-      nextTier?.up !== undefined
-        ? Math.max(nextTier.up - currentPoints, 0)
-        : null;
-    const pointsToDropTier =
-      currentTier.down !== undefined
-        ? Math.max(currentPoints - currentTier.down, 0)
-        : null;
-
     return res.status(200).json({
       status: true,
       message: "User tier data fetched",
@@ -61,8 +52,6 @@ export const getNextUserTierInfo = async (req, res, next) => {
           up: currentTier.up,
           down: currentTier.down,
         },
-        pointsToNextTier,
-        pointsToDropTier,
       },
     });
   } catch (error) {
@@ -73,7 +62,7 @@ export const getNextUserTierInfo = async (req, res, next) => {
 export const updateUserTier = async (userId) => {
   const session = await mongoose.startSession();
   try {
-    let result = null; // Initialize result to null
+    let result = null;
     await session.withTransaction(async () => {
       const [user, userSubmission] = await Promise.all([
         User.findById(userId).session(session),
