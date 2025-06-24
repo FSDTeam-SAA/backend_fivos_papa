@@ -3,16 +3,86 @@ import { User } from "../model/user.model.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
 
 const tierTable = [
-  { name: "NOVICE SEEKER", up: 1, down: undefined, retain: [0] },
-  { name: "INITIATE", up: 1, down: -30, retain: [-29, 0] },
-  { name: "APPRENTICE", up: 31, down: 0, retain: [1, 30] },
-  { name: "EXPLORER", up: 61, down: 0, retain: [1, 60] },
-  { name: "VISIONARY", up: 81, down: 30, retain: [31, 80] },
-  { name: "ADEPT", up: 101, down: 30, retain: [31, 100] },
-  { name: "SEER", up: 121, down: 60, retain: [61, 120] },
-  { name: "ORACLE", up: 141, down: 60, retain: [61, 140] },
-  { name: "MASTER REMOTE VIEWER", up: 161, down: 100, retain: [101, 160] },
-  { name: "ASCENDING MASTER", up: undefined, down: 120, retain: [121] },
+  {
+    name: "NOVICE SEEKER",
+    up: 1,
+    down: undefined,
+    retain: [0],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.47_33b37d3e_auyufl.jpg",
+  },
+  {
+    name: "INITIATE",
+    up: 1,
+    down: -30,
+    retain: [-29, 0],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_61543db5_bmt0rp.jpg",
+  },
+  {
+    name: "APPRENTICE",
+    up: 31,
+    down: 0,
+    retain: [1, 30],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.46_09e5ccc2_inab8i.jpg",
+  },
+  {
+    name: "EXPLORER",
+    up: 61,
+    down: 0,
+    retain: [1, 60],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_10ad1961_cbyovm.jpg",
+  },
+  {
+    name: "VISIONARY",
+    up: 81,
+    down: 30,
+    retain: [31, 80],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_159602ec_izzy2x.jpg",
+  },
+  {
+    name: "ADEPT",
+    up: 101,
+    down: 30,
+    retain: [31, 100],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.46_d3b5090c_jkdgn5.jpg",
+  },
+  {
+    name: "SEER",
+    up: 121,
+    down: 60,
+    retain: [61, 120],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.47_872179ca_yjw7p8.jpg",
+  },
+  {
+    name: "ORACLE",
+    up: 141,
+    down: 60,
+    retain: [61, 140],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760774/Screenshot_2025-06-24_162548_sd6f7x.png",
+  },
+  {
+    name: "MASTER REMOTE VIEWER",
+    up: 161,
+    down: 100,
+    retain: [101, 160],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_9aa33538_wdmtfz.jpg",
+  },
+  {
+    name: "ASCENDING MASTER",
+    up: undefined,
+    down: 120,
+    retain: [121],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_35818ccb_he4t79.jpg",
+  },
 ];
 
 export const getNextUserTierInfo = async (req, res, next) => {
@@ -51,6 +121,7 @@ export const getNextUserTierInfo = async (req, res, next) => {
           retain: currentTier.retain,
           up: currentTier.up,
           down: currentTier.down,
+          image: currentTier.image,
         },
       },
     });
