@@ -138,7 +138,11 @@ export const updateMakeInActiveService = async (id, model, res, next) => {
       });
     }
 
-    await model.findByIdAndUpdate(id, { isActive: false }, { new: true });
+    await model.findByIdAndUpdate(
+      id,
+      { isActive: false, isPartiallyActive: false },
+      { new: true }
+    );
     return res.status(200).json({
       status: true,
       message: "Game inactivated successfully",
