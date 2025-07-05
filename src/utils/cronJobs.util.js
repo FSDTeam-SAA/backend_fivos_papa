@@ -100,11 +100,16 @@ const checkTMCGames = async () => {
     const activeGame = await TMCTarget.findOne({ isActive: true });
 
     if (activeGame) {
-      const { startTime, gameTime, revealDuration, bufferDuration, status } =
-        activeGame;
+      const {
+        startTime,
+        gameDuration,
+        revealDuration,
+        bufferDuration,
+        status,
+      } = activeGame;
 
       const gameStart = new Date(startTime).getTime();
-      const gameEnd = gameStart + gameTime * 60000;
+      const gameEnd = gameStart + gameDuration * 60000;
       const revealEnd = gameEnd + revealDuration * 60000;
       const bufferEnd = gameStart + bufferDuration * 60000;
 
