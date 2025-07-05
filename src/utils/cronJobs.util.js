@@ -95,57 +95,61 @@ const checkARVGames = async () => {
 };
 
 const checkTMCGames = async () => {
-  // console.log(
-  //   `[${new Date().toISOString()}] TMC cron: Checking for games to complete...`
-  // );
   try {
-    const gamesToComplete = await TMCTarget.find({
-      isCompleted: false,
-      bufferTime: { $lte: new Date() },
-    });
+    const now = new Date();
+    const activeGame = await TMCTarget.findOne({ isActive: true });
 
-    // console.log(
-    //   `[${new Date().toISOString()}] TMC cron: Found ${
-    //     gamesToComplete.length
-    //   } games to complete.`
-    // );
+    if (activeGame) {
+      const { startTime, gameTime, revealDuration, bufferDuration, status } =
+        activeGame;
 
-    for (const game of gamesToComplete) {
-      console.log(
-        `[${new Date().toISOString()}] TMC cron: Completing game ${game.code}`
-      );
-      await TMCTarget.findByIdAndUpdate(game._id, {
-        isCompleted: true,
-        isPartiallyActive: false,
-        isActive: false,
-      });
+      const gameStart = new Date(startTime).getTime();
+      const gameEnd = gameStart + gameTime * 60000;
+      const revealEnd = gameEnd + revealDuration * 60000;
+      const bufferEnd = gameStart + bufferDuration * 60000;
 
-      await CompletedTargets.findByIdAndUpdate(
-        process.env.COMPLETED_TARGETS_DOCUMENT_ID,
-        { $push: { TMCTargets: game._id } }
-      );
+      if (now.getTime() >= bufferEnd) {
+        await TMCTarget.findByIdAndUpdate(activeGame._id, {
+          isCompleted: true,
+          isActive: false,
+          isPartiallyActive: false,
+          status: "expired",
+        });
 
-      await Notification.deleteMany({ targetCode: game.code });
-
-      const nextGame = await TMCTarget.findOneAndUpdate(
-        { isCompleted: false, isQueued: true },
-        { isQueued: false, isActive: true, isPartiallyActive: true },
-        { new: true }
-      );
-      if (nextGame) {
-        console.log(
-          `[${new Date().toISOString()}] TMC cron: Started next game ${
-            nextGame.code
-          }`
+        await CompletedTargets.findByIdAndUpdate(
+          process.env.COMPLETED_TARGETS_DOCUMENT_ID,
+          { $push: { TMCTargets: activeGame._id } }
         );
-        await Notification.create({
-          message: `New TMC game has started`,
-          targetCode: nextGame.code,
+
+        await Notification.deleteMany({ targetCode: activeGame.code });
+
+        // Start next game
+        const nextGame = await TMCTarget.findOneAndUpdate(
+          { isQueued: true, isCompleted: false },
+          {
+            isQueued: false,
+            isActive: true,
+            isPartiallyActive: true,
+            startTime: now,
+            status: "active",
+          },
+          { new: true }
+        );
+
+        if (nextGame) {
+          await Notification.create({
+            message: `New TMC game has started`,
+            targetCode: nextGame.code,
+          });
+        }
+      } else if (now.getTime() >= gameEnd && status === "active") {
+        await TMCTarget.findByIdAndUpdate(activeGame._id, {
+          status: "revealed",
         });
       }
     }
-  } catch (error) {
-    console.error("Error in TMC game cron:", error);
+  } catch (err) {
+    console.error("Error in TMC Cron:", err);
   }
 };
 

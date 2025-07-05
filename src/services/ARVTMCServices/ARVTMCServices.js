@@ -40,7 +40,12 @@ export const startNextGameService = async (model, res, next, gameName) => {
     const nextGame = await model
       .findOneAndUpdate(
         { isCompleted: false, isQueued: true },
-        { isQueued: false, isActive: true, isPartiallyActive: true },
+        {
+          isQueued: false,
+          isActive: true,
+          isPartiallyActive: true,
+          status: "active",
+        },
         { new: true }
       )
       .select("-createdAt -updatedAt -__v")
@@ -82,7 +87,13 @@ export const updateAddToQueueService = async (
   }
 
   try {
-    await model.findByIdAndUpdate(id, { isQueued: true }, { new: true }).lean();
+    await model
+      .findByIdAndUpdate(
+        id,
+        { isQueued: true, status: "queued" },
+        { new: true }
+      )
+      .lean();
     return res.status(200).json({
       status: true,
       message: "Added to queue successfully",
