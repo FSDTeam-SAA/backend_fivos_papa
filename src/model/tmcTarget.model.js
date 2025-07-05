@@ -3,40 +3,32 @@ import { Notification } from "../model/notification.model.js";
 
 const TMCTargetSchema = new Schema(
   {
-    code: {
+    code: { type: String, unique: true },
+
+    targetImage: { type: String },
+    controlImages: [{ type: String }],
+
+    startTime: { type: Date },
+    gameTime: { type: Number },
+    revealDuration: { type: Number },
+    bufferDuration: { type: Number },
+
+    isActive: { type: Boolean, default: false },
+    isPartiallyActive: { type: Boolean, default: false },
+    isQueued: { type: Boolean, default: false },
+    isCompleted: { type: Boolean, default: false },
+
+    status: {
       type: String,
-      unique: true,
-    },
-    targetImage: {
-      type: String,
-    },
-    controlImages: [
-      {
-        type: String,
-      },
-    ],
-    revealTime: { type: Date },
-    bufferTime: {
-      type: Date,
-    },
-    gameTime: {
-      type: Date,
-    },
-    isActive: {
-      type: Boolean,
-      default: false,
-    },
-    isPartiallyActive: {
-      type: Boolean,
-      default: false,
-    },
-    isQueued: {
-      type: Boolean,
-      default: false,
-    },
-    isCompleted: {
-      type: Boolean,
-      default: false,
+      enum: [
+        "inactive",
+        "queued",
+        "active",
+        "revealed",
+        "expired",
+        "completed",
+      ],
+      default: "inactive",
     },
   },
   { timestamps: true }
