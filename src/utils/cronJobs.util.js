@@ -123,7 +123,11 @@ const checkTMCGames = async () => {
 
         await Notification.deleteMany({ targetCode: activeGame.code });
 
-        // Start next game
+        await Notification.create({
+          message: `Game ${activeGame.code} has expired.`,
+          targetCode: activeGame.code,
+        });
+
         const nextGame = await TMCTarget.findOneAndUpdate(
           { isQueued: true, isCompleted: false },
           {
@@ -138,7 +142,7 @@ const checkTMCGames = async () => {
 
         if (nextGame) {
           await Notification.create({
-            message: `New TMC game has started`,
+            message: `New TMC game has started.`,
             targetCode: nextGame.code,
           });
         }
@@ -146,6 +150,12 @@ const checkTMCGames = async () => {
         await TMCTarget.findByIdAndUpdate(activeGame._id, {
           status: "revealed",
         });
+
+        await Notification.create({
+          message: `Game ${activeGame.code} has been revealed.`,
+          targetCode: activeGame.code,
+        });
+      } else if (now.getTime() >= revealEnd && status === "revealed") {
       }
     }
   } catch (err) {
