@@ -60,6 +60,18 @@ const ARVTargetSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    status: {
+      type: String,
+      enum: [
+        "inactive",
+        "queued",
+        "active",
+        "revealed",
+        "expired",
+        "completed",
+      ],
+      default: "inactive",
+    },
   },
   { timestamps: true }
 );

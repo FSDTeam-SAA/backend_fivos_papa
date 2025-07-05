@@ -40,29 +40,25 @@ const checkInactiveUsers = async () => {
 };
 
 const checkARVGames = async () => {
-  // console.log(
-  //   `[${new Date().toISOString()}] ARV cron: Checking for games to complete...`
-  // );
+  const now = new Date();
+
   try {
-    const gamesToComplete = await ARVTarget.find({
+    await ARVTarget.updateMany(
+      { revealTime: { $lte: now }, status: "active" },
+      { status: "revealed", isActive: false, isPartiallyActive: true }
+    );
+
+    const toComplete = await ARVTarget.find({
+      bufferTime: { $lte: now },
       isCompleted: false,
-      bufferTime: { $lte: new Date() },
     });
 
-    // console.log(
-    //   `[${new Date().toISOString()}] ARV cron: Found ${
-    //     gamesToComplete.length
-    //   } games to complete.`
-    // );
-
-    for (const game of gamesToComplete) {
-      console.log(
-        `[${new Date().toISOString()}] ARV cron: Completing game ${game.code}`
-      );
+    for (const game of toComplete) {
       await ARVTarget.findByIdAndUpdate(game._id, {
+        status: "completed",
         isCompleted: true,
-        isPartiallyActive: false,
         isActive: false,
+        isPartiallyActive: false,
       });
 
       await CompletedTargets.findByIdAndUpdate(
@@ -72,19 +68,25 @@ const checkARVGames = async () => {
 
       await Notification.deleteMany({ targetCode: game.code });
 
+      await Notification.create({
+        message: `ARV game ${game.code} is completed.`,
+        targetCode: game.code,
+      });
+
       const nextGame = await ARVTarget.findOneAndUpdate(
-        { isCompleted: false, isQueued: true },
-        { isQueued: false, isActive: true, isPartiallyActive: true },
+        { isQueued: true, isCompleted: false },
+        {
+          isQueued: false,
+          isActive: true,
+          isPartiallyActive: true,
+          status: "active",
+        },
         { new: true }
       );
+
       if (nextGame) {
-        console.log(
-          `[${new Date().toISOString()}] ARV cron: Started next game ${
-            nextGame.code
-          }`
-        );
         await Notification.create({
-          message: `New ARV game has started`,
+          message: `New ARV game ${nextGame.code} has started.`,
           targetCode: nextGame.code,
         });
       }

@@ -14,15 +14,26 @@ export const createTMCTarget = async (req, res, next) => {
   const {
     targetImage,
     controlImages,
-    gameStart, // string: ISO date
-    revealTime, // string: ISO date
-    bufferTime, // string: ISO date
+    gameStart, // ISO String: "2025-07-05T12:00:00Z"
+    revealTime, // ISO String: "2025-07-05T12:05:00Z"
+    bufferTime, // ISO String: "2025-07-05T12:10:00Z"
   } = req.body;
 
   try {
     const gameStartTime = new Date(gameStart);
     const revealDateTime = new Date(revealTime);
     const bufferDateTime = new Date(bufferTime);
+
+    if (
+      isNaN(gameStartTime) ||
+      isNaN(revealDateTime) ||
+      isNaN(bufferDateTime)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid date format for gameStart, revealTime or bufferTime",
+      });
+    }
 
     if (revealDateTime <= gameStartTime) {
       return res.status(400).json({
@@ -38,14 +49,12 @@ export const createTMCTarget = async (req, res, next) => {
       });
     }
 
-    // Convert durations in minutes
-    const gameTime = Math.round((revealDateTime - gameStartTime) / 60000);
+    const gameDuration = Math.round((revealDateTime - gameStartTime) / 60000);
     const revealDuration = Math.round(
       (bufferDateTime - revealDateTime) / 60000
     );
-    const bufferDuration = gameTime + revealDuration;
+    const bufferDuration = gameDuration + revealDuration;
 
-    // Ensure unique code
     let code, arvCode, tmcCode;
     do {
       code = generateCode();
@@ -58,7 +67,7 @@ export const createTMCTarget = async (req, res, next) => {
       targetImage,
       controlImages,
       startTime: gameStartTime,
-      gameTime,
+      gameDuration,
       revealDuration,
       bufferDuration,
       status: "inactive",
@@ -69,6 +78,7 @@ export const createTMCTarget = async (req, res, next) => {
     return res.status(201).json({
       status: true,
       message: "TMC Game created successfully",
+      data: newTMCTarget,
     });
   } catch (error) {
     next(error);
@@ -208,8 +218,10 @@ export const updateAddToQueue = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    const { gameTime } = await TMCTarget.findById(id).select("gameTime");
-    await updateAddToQueueService(id, TMCTarget, res, next, gameTime);
+    const { gameDuration } = await TMCTarget.findById(id).select(
+      "gameDuration"
+    );
+    await updateAddToQueueService(id, TMCTarget, res, next, gameDuration);
   } catch (error) {
     next(error);
   }
