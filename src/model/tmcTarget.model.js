@@ -9,7 +9,7 @@ const TMCTargetSchema = new Schema(
     controlImages: [{ type: String }],
 
     startTime: { type: Date },
-    gameTime: { type: Number },
+    gameDuration: { type: Number },
     revealDuration: { type: Number },
     bufferDuration: { type: Number },
 
