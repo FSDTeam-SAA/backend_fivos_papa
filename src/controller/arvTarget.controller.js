@@ -2,7 +2,6 @@ import { ARVTarget } from "../model/arvTarget.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import {
   startNextGameService,
-  updateAddToQueueService,
   updateGameTimeService,
   updateMakeCompleteService,
   updateMakeInActiveService,
@@ -15,13 +14,13 @@ export const createARVTarget = async (req, res, next) => {
     eventName,
     eventDescription,
     gameTime,
+    revealTime,
+    outcomeTime,
+    bufferTime,
     image1,
     image2,
     image3,
     controlImage,
-    revealDuration,
-    outcomeDuration,
-    bufferDuration,
   } = req.body;
 
   try {
@@ -34,24 +33,26 @@ export const createARVTarget = async (req, res, next) => {
       tmcCode = await TMCTarget.findOne({ code });
     } while (arvCode || tmcCode);
 
-    const gameStart = new Date(gameTime).getTime();
-    const revealTime = new Date(gameStart + revealDuration * 60000);
-    const outcomeTime = new Date(
-      revealTime.getTime() + outcomeDuration * 60000
-    );
-    const bufferTime = new Date(gameStart + bufferDuration * 60000);
+    const gameStart = new Date(gameTime);
+    const reveal = new Date(revealTime);
+    const outcome = new Date(outcomeTime);
+    const buffer = new Date(bufferTime);
 
-    if (revealTime > outcomeTime) {
+    const revealDuration = Math.round((reveal - gameStart) / 60000);
+    const outcomeDuration = Math.round((outcome - reveal) / 60000);
+    const bufferDuration = Math.round((buffer - gameStart) / 60000);
+
+    if (reveal >= outcome) {
       return res.status(400).json({
         status: false,
-        message: "Outcome time should be after reveal time",
+        message: "Outcome time must be after reveal time",
       });
     }
 
-    if (outcomeTime > bufferTime) {
+    if (outcome >= buffer) {
       return res.status(400).json({
         status: false,
-        message: "Buffer time should be after outcome time",
+        message: "Buffer time must be after outcome time",
       });
     }
 
@@ -59,17 +60,17 @@ export const createARVTarget = async (req, res, next) => {
       code,
       eventName,
       eventDescription,
-      gameTime,
+      gameTime: gameStart,
+      revealTime: reveal,
+      outcomeTime: outcome,
+      bufferTime: buffer,
+      revealDuration,
+      outcomeDuration,
+      bufferDuration,
       image1,
       image2,
       image3,
       controlImage,
-      revealDuration,
-      outcomeDuration,
-      bufferDuration,
-      revealTime,
-      outcomeTime,
-      bufferTime,
     });
 
     await newARVTarget.save();
