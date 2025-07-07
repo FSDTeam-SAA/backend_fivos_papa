@@ -14,14 +14,14 @@ export const createARVTarget = async (req, res, next) => {
   const {
     eventName,
     eventDescription,
-    revealTime,
-    outcomeTime,
-    bufferTime,
     gameTime,
     image1,
     image2,
     image3,
     controlImage,
+    revealDuration,
+    outcomeDuration,
+    bufferDuration,
   } = req.body;
 
   try {
@@ -30,29 +30,28 @@ export const createARVTarget = async (req, res, next) => {
 
     do {
       code = generateCode();
-
       arvCode = await ARVTarget.findOne({ code });
       tmcCode = await TMCTarget.findOne({ code });
     } while (arvCode || tmcCode);
 
-    if (new Date(revealTime).getTime() < new Date(gameTime).getTime()) {
+    const gameStart = new Date(gameTime).getTime();
+    const revealTime = new Date(gameStart + revealDuration * 60000);
+    const outcomeTime = new Date(
+      revealTime.getTime() + outcomeDuration * 60000
+    );
+    const bufferTime = new Date(gameStart + bufferDuration * 60000);
+
+    if (revealTime > outcomeTime) {
       return res.status(400).json({
         status: false,
-        message: "Reveal time should be in the future or equal to game time",
+        message: "Outcome time should be after reveal time",
       });
-    } else if (
-      new Date(revealTime).getTime() >= new Date(outcomeTime).getTime()
-    ) {
+    }
+
+    if (outcomeTime > bufferTime) {
       return res.status(400).json({
         status: false,
-        message: "Outcome time should be in the future of reveal time",
-      });
-    } else if (
-      new Date(outcomeTime).getTime() > new Date(bufferTime).getTime()
-    ) {
-      return res.status(400).json({
-        status: false,
-        message: "Buffer time should be in the future or equal to outcome time",
+        message: "Buffer time should be after outcome time",
       });
     }
 
@@ -60,14 +59,17 @@ export const createARVTarget = async (req, res, next) => {
       code,
       eventName,
       eventDescription,
-      revealTime,
-      outcomeTime,
-      bufferTime,
       gameTime,
       image1,
       image2,
       image3,
       controlImage,
+      revealDuration,
+      outcomeDuration,
+      bufferDuration,
+      revealTime,
+      outcomeTime,
+      bufferTime,
     });
 
     await newARVTarget.save();
