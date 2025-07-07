@@ -1,4 +1,5 @@
 import { ARVTarget } from "../model/arvTarget.model.js";
+import { CategoryImage } from "../model/categoryImage.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import {
   startNextGameService,
@@ -9,6 +10,27 @@ import {
   updateRemoveFromQueueService,
 } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { generateCode } from "../utils/generateCode.js";
+
+export const markImageAsUsed = async (imageUrl) => {
+  const category = await CategoryImage.findOne({
+    "subCategories.images.imageUrl": imageUrl,
+  });
+
+  if (!category) return;
+
+  for (let subCat of category.subCategories) {
+    for (let image of subCat.images) {
+      if (image.imageUrl === imageUrl) {
+        image.isUsed = true;
+        image.status = "used";
+        image.usedAt = new Date();
+        break;
+      }
+    }
+  }
+
+  await category.save();
+};
 
 export const createTMCTarget = async (req, res, next) => {
   const {
@@ -74,6 +96,12 @@ export const createTMCTarget = async (req, res, next) => {
     });
 
     await newTMCTarget.save();
+
+    // Mark images as used
+    await markImageAsUsed(targetImage);
+    for (const image of controlImages) {
+      await markImageAsUsed(image);
+    }
 
     return res.status(201).json({
       status: true,

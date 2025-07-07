@@ -8,6 +8,7 @@ import {
   updateRemoveFromQueueService,
 } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { generateCode } from "../utils/generateCode.js";
+import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
 
 export const createARVTarget = async (req, res, next) => {
   const {
@@ -74,6 +75,12 @@ export const createARVTarget = async (req, res, next) => {
     });
 
     await newARVTarget.save();
+
+    // Mark all used images
+    await markImageAsUsed(image1);
+    await markImageAsUsed(image2);
+    await markImageAsUsed(image3);
+    await markImageAsUsed(controlImage);
 
     return res.status(201).json({
       status: true,
