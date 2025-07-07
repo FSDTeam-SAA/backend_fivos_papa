@@ -16,8 +16,17 @@ const categoryImageSchema = new Schema({
           imageUrl: String,
           isUsed: {
             type: Boolean,
-            default: false
-          }
+            default: false,
+          },
+          status: {
+            type: String,
+            enum: ["unused", "used", "reserved"],
+            default: "unused",
+          },
+          usedAt: {
+            type: Date,
+            default: null,
+          },
         },
       ],
     },
