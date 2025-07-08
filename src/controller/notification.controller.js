@@ -1,8 +1,13 @@
 import { Notification } from "../model/notification.model.js";
+import {
+  emitNotification,
+  emitGlobalNotification,
+} from "../jobs/notificationJob.js";
 
 export const createNotification = async (req, res, next) => {
   const { userId } = req.params;
   const { message, targetCode } = req.body;
+  const io = req.app.get("io");
 
   try {
     const notification = await Notification.create({
@@ -10,6 +15,12 @@ export const createNotification = async (req, res, next) => {
       message,
       targetCode,
     });
+
+    if (userId) {
+      emitNotification(io, userId, notification);
+    } else {
+      emitGlobalNotification(io, notification);
+    }
 
     return res.status(201).json({
       status: true,
@@ -20,6 +31,8 @@ export const createNotification = async (req, res, next) => {
     next(error);
   }
 };
+
+// ... rest of your existing controller methods ...
 
 export const getNotifications = async (req, res, next) => {
   const { userId } = req.params;

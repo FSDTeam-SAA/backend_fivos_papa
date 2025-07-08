@@ -4,8 +4,12 @@ import { TMCTarget } from "../model/tmcTarget.model.js";
 import { CompletedTargets } from "../model/completedTargets.model.js";
 import { Notification } from "../model/notification.model.js";
 import cron from "node-cron";
+import {
+  emitNotification,
+  emitGlobalNotification,
+} from "../jobs/notificationJob.js";
 
-const checkInactiveUsers = async () => {
+const checkInactiveUsers = async (io) => {
   const inactiveThreshold = 10 * 60 * 1000; // 10 minutes
   try {
     const inactiveUsers = await User.find({
@@ -39,14 +43,27 @@ const checkInactiveUsers = async () => {
   }
 };
 
-const checkARVGames = async () => {
+const checkARVGames = async (io) => {
   const now = new Date();
 
   try {
-    await ARVTarget.updateMany(
-      { revealTime: { $lte: now }, status: "active" },
-      { status: "revealed", isActive: false, isPartiallyActive: true }
-    );
+    const gamesToReveal = await ARVTarget.find({
+      revealTime: { $lte: now },
+      status: "active",
+    });
+
+    for (const game of gamesToReveal) {
+      await ARVTarget.findByIdAndUpdate(game._id, {
+        status: "revealed",
+        isActive: false,
+        isPartiallyActive: true,
+      });
+
+      await emitGlobalNotification(io, {
+        message: `ARV game ${game.code} has been revealed!`,
+        targetCode: game.code,
+      });
+    }
 
     const toComplete = await ARVTarget.find({
       bufferTime: { $lte: now },
@@ -68,7 +85,7 @@ const checkARVGames = async () => {
 
       await Notification.deleteMany({ targetCode: game.code });
 
-      await Notification.create({
+      await emitGlobalNotification(io, {
         message: `ARV game ${game.code} is completed.`,
         targetCode: game.code,
       });
@@ -85,8 +102,8 @@ const checkARVGames = async () => {
       );
 
       if (nextGame) {
-        await Notification.create({
-          message: `New ARV game ${nextGame.code} has started.`,
+        await emitGlobalNotification(io, {
+          message: `New ARV game ${nextGame.code} has started!`,
           targetCode: nextGame.code,
         });
       }
@@ -96,13 +113,15 @@ const checkARVGames = async () => {
   }
 };
 
-const checkTMCGames = async () => {
+const checkTMCGames = async (io) => {
   try {
     const now = new Date();
     const activeGame = await TMCTarget.findOne({ isActive: true });
 
     if (activeGame) {
       const {
+        _id,
+        code,
         startTime,
         gameDuration,
         revealDuration,
@@ -116,7 +135,7 @@ const checkTMCGames = async () => {
       const bufferEnd = gameStart + bufferDuration * 60000;
 
       if (now.getTime() >= bufferEnd) {
-        await TMCTarget.findByIdAndUpdate(activeGame._id, {
+        await TMCTarget.findByIdAndUpdate(_id, {
           isCompleted: true,
           isActive: false,
           isPartiallyActive: false,
@@ -125,14 +144,14 @@ const checkTMCGames = async () => {
 
         await CompletedTargets.findByIdAndUpdate(
           process.env.COMPLETED_TARGETS_DOCUMENT_ID,
-          { $push: { TMCTargets: activeGame._id } }
+          { $push: { TMCTargets: _id } }
         );
 
-        await Notification.deleteMany({ targetCode: activeGame.code });
+        await Notification.deleteMany({ targetCode: code });
 
-        await Notification.create({
-          message: `Game ${activeGame.code} has expired.`,
-          targetCode: activeGame.code,
+        await emitGlobalNotification(io, {
+          message: `TMC game ${code} has ended. Final results are now available!`,
+          targetCode: code,
         });
 
         const nextGame = await TMCTarget.findOneAndUpdate(
@@ -148,21 +167,34 @@ const checkTMCGames = async () => {
         );
 
         if (nextGame) {
-          await Notification.create({
-            message: `New TMC game has started.`,
+          await emitGlobalNotification(io, {
+            message: `New TMC game ${nextGame.code} has started! Join now!`,
             targetCode: nextGame.code,
           });
         }
       } else if (now.getTime() >= gameEnd && status === "active") {
-        await TMCTarget.findByIdAndUpdate(activeGame._id, {
+        await TMCTarget.findByIdAndUpdate(_id, {
           status: "revealed",
         });
 
-        await Notification.create({
-          message: `Game ${activeGame.code} has been revealed.`,
-          targetCode: activeGame.code,
+        await emitGlobalNotification(io, {
+          message: `TMC game ${code} results have been revealed! Check your predictions!`,
+          targetCode: code,
         });
       } else if (now.getTime() >= revealEnd && status === "revealed") {
+        await emitGlobalNotification(io, {
+          message: `TMC game ${code} final scores are now locked in!`,
+          targetCode: code,
+        });
+      } else if (status === "active") {
+        const timeLeft = Math.ceil((gameEnd - now.getTime()) / 60000);
+        if (timeLeft % 15 === 0) {
+          // Every 15 minutes
+          await emitGlobalNotification(io, {
+            message: `TMC game ${code} is active! ${timeLeft} minutes remaining!`,
+            targetCode: code,
+          });
+        }
       }
     }
   } catch (err) {
@@ -170,20 +202,22 @@ const checkTMCGames = async () => {
   }
 };
 
-const initCronJobs = () => {
+const initCronJobs = (io) => {
+  // Check inactive users every 5 minutes
   cron.schedule("*/5 * * * *", () => {
     console.log(
       `[${new Date().toISOString()}] Running inactive users check...`
     );
-    checkInactiveUsers();
+    checkInactiveUsers(io);
   });
 
+  // Check ARV and TMC games every minute
   cron.schedule("* * * * *", () => {
     console.log(
       `[${new Date().toISOString()}] Running ARV and TMC cron jobs...`
     );
-    checkARVGames();
-    checkTMCGames();
+    checkARVGames(io);
+    checkTMCGames(io);
   });
 };
 
