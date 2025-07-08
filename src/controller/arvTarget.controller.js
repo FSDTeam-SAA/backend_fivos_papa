@@ -9,6 +9,7 @@ import {
 } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { generateCode } from "../utils/generateCode.js";
 import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
+import { Notification } from "../model/notification.model.js";
 
 export const createARVTarget = async (req, res, next) => {
   const {

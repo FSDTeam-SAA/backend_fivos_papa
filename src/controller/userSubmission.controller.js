@@ -5,6 +5,7 @@ import { UserSubmission } from "../model/userSubmission.model.js";
 import { User } from "../model/user.model.js";
 import { updateUserTier } from "./tier.controller.js";
 import { Notification } from "../model/notification.model.js";
+import { emitNotification } from "../jobs/notificationJob.js";
 
 // P value
 const erf = (x) => {
@@ -84,12 +85,10 @@ export const checkTierUpdate = async (userId) => {
       };
     }
 
-    const notification = new Notification({
+    await emitNotification(io, {
       userId,
       message: `Your cycle has been renewed. Your previous total points ${updateResult.previousPoints}, your previous tier is ${updateResult.previousTier} and your new tier is ${updateResult.newTier}.`,
     });
-
-    await notification.save();
 
     return {
       status: true,

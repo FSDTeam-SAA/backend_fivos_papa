@@ -30,3 +30,48 @@ cron.schedule("* * * * *", async () => {
   await checkAndNotify(ARVTarget, "ARV");
   await checkAndNotify(TMCTarget, "TMC");
 });
+
+export const emitNotification = async (io, { userId, message, targetCode }) => {
+  try {
+    const notification = await Notification.create({
+      userId,
+      message,
+      targetCode,
+    });
+
+    if (userId) {
+      io.to(`user_${userId}`).emit("notification", notification);
+    }
+
+    if (targetCode) {
+      io.to(`game_${targetCode}`).emit("gameNotification", notification);
+    }
+
+    io.to("admin").emit("adminNotification", notification);
+
+    return notification;
+  } catch (error) {
+    console.error("Error emitting notification:", error);
+    throw error;
+  }
+};
+
+export const emitGlobalNotification = async (io, { message, targetCode }) => {
+  try {
+    const notification = await Notification.create({
+      message,
+      targetCode,
+    });
+
+    io.emit("globalNotification", notification);
+
+    if (targetCode) {
+      io.to(`game_${targetCode}`).emit("gameNotification", notification);
+    }
+
+    return notification;
+  } catch (error) {
+    console.error("Error emitting global notification:", error);
+    throw error;
+  }
+};
