@@ -77,23 +77,28 @@ export const updateAddToQueueService = async (
   model,
   res,
   next,
-  gameTime
+  gameDuration
 ) => {
-  if (new Date(gameTime).getTime() < new Date().getTime()) {
-    return res.status(403).json({
-      status: false,
-      message: "Current time exceeds game time",
-    });
-  }
-
   try {
-    await model
-      .findByIdAndUpdate(
-        id,
-        { isQueued: true, status: "queued" },
-        { new: true }
-      )
-      .lean();
+    const { startTime } = await model.findById(id).select("startTime");
+
+    const gameStartTime = new Date(startTime);
+    const gameEndTime = new Date(gameStartTime);
+    gameEndTime.setMinutes(gameEndTime.getMinutes() + gameDuration);
+
+    if (gameEndTime.getTime() < Date.now()) {
+      return res.status(403).json({
+        status: false,
+        message: "Game duration already passed",
+      });
+    }
+
+    await model.findByIdAndUpdate(
+      id,
+      { isQueued: true, status: "queued" },
+      { new: true }
+    );
+
     return res.status(200).json({
       status: true,
       message: "Added to queue successfully",
@@ -140,12 +145,15 @@ export const updateGameTimeService = async (id, gameTime, model, res, next) => {
 
 export const updateMakeInActiveService = async (id, model, res, next) => {
   try {
-    const { gameTime } = await model.findById(id).select("gameTime");
+    const doc = await model.findById(id).select("startTime gameDuration");
 
-    if (new Date(gameTime).getTime() > new Date().getTime()) {
+    const gameEnd = new Date(doc.startTime);
+    gameEnd.setMinutes(gameEnd.getMinutes() + doc.gameDuration);
+
+    if (Date.now() < gameEnd.getTime()) {
       return res.status(403).json({
         status: false,
-        message: "You cannot make a game inactive unless the game time is over",
+        message: "Cannot make inactive before game end time",
       });
     }
 
@@ -171,13 +179,19 @@ export const updateMakeCompleteService = async (
   next
 ) => {
   try {
-    const { bufferTime } = await model.findById(id).select("bufferTime");
+    const doc = await model
+      .findById(id)
+      .select("startTime gameDuration revealDuration bufferDuration");
 
-    if (new Date(bufferTime).getTime() > new Date().getTime()) {
+    const totalMinutes =
+      doc.gameDuration + doc.revealDuration + doc.bufferDuration;
+    const bufferEnd = new Date(doc.startTime);
+    bufferEnd.setMinutes(bufferEnd.getMinutes() + totalMinutes);
+
+    if (Date.now() < bufferEnd.getTime()) {
       return res.status(403).json({
         status: false,
-        message:
-          "You cannot make a game complete unless the buffer time is over",
+        message: "Cannot complete game before buffer time ends",
       });
     }
 
