@@ -7,7 +7,7 @@ import { ARVTarget } from "../model/arvTarget.model.js";
 // Run every minute
 cron.schedule("* * * * *", async () => {
   const now = new Date();
-  const roundedNow = new Date(Math.floor(now.getTime() / 60000) * 60000); // round to nearest minute
+  const roundedNow = new Date(Math.floor(now.getTime() / 60000) * 60000);
 
   const checkAndNotify = async (Model, type) => {
     const targets = await Model.find({

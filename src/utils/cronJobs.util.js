@@ -8,6 +8,7 @@ import {
   emitNotification,
   emitGlobalNotification,
 } from "../jobs/notificationJob.js";
+import { startNextGameFromCron } from "../services/ARVTMCServices/ARVTMCServices.js";
 
 const checkInactiveUsers = async (io) => {
   const inactiveThreshold = 10 * 60 * 1000; // 10 minutes
@@ -90,16 +91,18 @@ const checkARVGames = async (io) => {
         targetCode: game.code,
       });
 
-      const nextGame = await ARVTarget.findOneAndUpdate(
-        { isQueued: true, isCompleted: false },
-        {
-          isQueued: false,
-          isActive: true,
-          isPartiallyActive: true,
-          status: "active",
-        },
-        { new: true }
-      );
+      // const nextGame = await ARVTarget.findOneAndUpdate(
+      //   { isQueued: true, isCompleted: false },
+      //   {
+      //     isQueued: false,
+      //     isActive: true,
+      //     isPartiallyActive: true,
+      //     status: "active",
+      //   },
+      //   { new: true }
+      // );
+
+      await startNextGameFromCron(ARVTarget, io, console.error, "ARV");
 
       if (nextGame) {
         await emitGlobalNotification(io, {
@@ -154,17 +157,19 @@ const checkTMCGames = async (io) => {
           targetCode: code,
         });
 
-        const nextGame = await TMCTarget.findOneAndUpdate(
-          { isQueued: true, isCompleted: false },
-          {
-            isQueued: false,
-            isActive: true,
-            isPartiallyActive: true,
-            startTime: now,
-            status: "active",
-          },
-          { new: true }
-        );
+        // const nextGame = await TMCTarget.findOneAndUpdate(
+        //   { isQueued: true, isCompleted: false },
+        //   {
+        //     isQueued: false,
+        //     isActive: true,
+        //     isPartiallyActive: true,
+        //     startTime: now,
+        //     status: "active",
+        //   },
+        //   { new: true }
+        // );
+
+        await startNextGameFromCron(TMCTarget, io, console.error, "TMC");
 
         if (nextGame) {
           await emitGlobalNotification(io, {
