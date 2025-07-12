@@ -210,17 +210,11 @@ const checkTMCGames = async (io) => {
 const initCronJobs = (io) => {
   // Check inactive users every 5 minutes
   cron.schedule("*/5 * * * *", () => {
-    console.log(
-      `[${new Date().toISOString()}] Running inactive users check...`
-    );
     checkInactiveUsers(io);
   });
 
   // Check ARV and TMC games every minute
   cron.schedule("* * * * *", () => {
-    console.log(
-      `[${new Date().toISOString()}] Running ARV and TMC cron jobs...`
-    );
     checkARVGames(io);
     checkTMCGames(io);
   });

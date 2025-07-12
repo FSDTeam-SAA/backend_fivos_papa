@@ -11,25 +11,29 @@ import {
 } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { generateCode } from "../utils/generateCode.js";
 
-export const markImageAsUsed = async (imageUrl) => {
-  const category = await CategoryImage.findOne({
-    "subCategories.images.imageUrl": imageUrl,
-  });
+export const markImageAsUsed = async (image) => {
+  const imageUrl = typeof image === "string" ? image : image?.url;
 
-  if (!category) return;
+  if (!imageUrl) return;
 
-  for (let subCat of category.subCategories) {
-    for (let image of subCat.images) {
-      if (image.imageUrl === imageUrl) {
-        image.isUsed = true;
-        image.status = "used";
-        image.usedAt = new Date();
-        break;
-      }
+  await CategoryImage.updateOne(
+    {
+      "subCategories.images.imageUrl": imageUrl,
+    },
+    {
+      $set: {
+        "subCategories.$[sub].images.$[img].isUsed": true,
+        "subCategories.$[sub].images.$[img].status": "used",
+        "subCategories.$[sub].images.$[img].usedAt": new Date(),
+      },
+    },
+    {
+      arrayFilters: [
+        { "sub.images.imageUrl": imageUrl },
+        { "img.imageUrl": imageUrl },
+      ],
     }
-  }
-
-  await category.save();
+  );
 };
 
 export const createTMCTarget = async (req, res, next) => {
