@@ -101,7 +101,12 @@ export const getAllARVTargets = async (req, res, next) => {
   try {
     const [totalItems, ARVTargets] = await Promise.all([
       ARVTarget.countDocuments(),
-      ARVTarget.find().select("-__v").skip(skip).limit(limit),
+      ARVTarget.find()
+        .select(
+          "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+        )
+        .skip(skip)
+        .limit(limit),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -139,7 +144,9 @@ export const getAllQueuedARVTargets = async (req, res, next) => {
         isActive: false,
         isPartiallyActive: false,
       })
-        .select("-__v")
+        .select(
+          "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+        )
         .skip(skip)
         .limit(limit),
     ]);
@@ -180,7 +187,9 @@ export const getAllUnQueuedARVTargets = async (req, res, next) => {
         isActive: false,
         isPartiallyActive: false,
       })
-        .select("-__v")
+        .select(
+          "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+        )
         .sort(sort) // Add sorting
         .skip(skip)
         .limit(limit),
@@ -209,7 +218,9 @@ export const getActiveARVTarget = async (_, res, next) => {
     const activeARVTarget = await ARVTarget.findOne({
       $or: [{ isActive: true }, { isPartiallyActive: true }],
     })
-      .select("-__v")
+      .select(
+        "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isPartiallyActive status"
+      )
       .lean();
 
     return res.status(200).json({
@@ -350,7 +361,9 @@ export const getPendingOutcomeGames = async (req, res, next) => {
       outcomeTime: { $lte: now },
       resultImage: { $exists: false },
       isCompleted: false,
-    }).select("-__v");
+    }).select(
+      "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+    );
 
     return res.status(200).json({
       status: true,
