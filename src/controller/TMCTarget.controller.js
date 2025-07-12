@@ -33,49 +33,26 @@ export const markImageAsUsed = async (imageUrl) => {
 };
 
 export const createTMCTarget = async (req, res, next) => {
-  const {
-    targetImage,
-    controlImages,
-    gameStart, // ISO String: "2025-07-05T12:00:00Z"
-    revealTime, // ISO String: "2025-07-05T12:05:00Z"
-    bufferTime, // ISO String: "2025-07-05T12:10:00Z"
-  } = req.body;
+  const { targetImage, controlImages, gameStart, revealTime, bufferTime } =
+    req.body;
 
   try {
     const gameStartTime = new Date(gameStart);
     const revealDateTime = new Date(revealTime);
     const bufferDateTime = new Date(bufferTime);
 
-    if (
-      isNaN(gameStartTime) ||
-      isNaN(revealDateTime) ||
-      isNaN(bufferDateTime)
-    ) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid date format for gameStart, revealTime or bufferTime",
-      });
-    }
-
-    if (revealDateTime <= gameStartTime) {
-      return res.status(400).json({
-        status: false,
-        message: "Reveal time must be after game start time",
-      });
-    }
-
-    if (bufferDateTime <= revealDateTime) {
-      return res.status(400).json({
-        status: false,
-        message: "Buffer time must be after reveal time",
-      });
-    }
-
     const gameDuration = Math.round((revealDateTime - gameStartTime) / 60000);
     const revealDuration = Math.round(
       (bufferDateTime - revealDateTime) / 60000
     );
     const bufferDuration = gameDuration + revealDuration;
+
+    if (gameDuration <= 0 || revealDuration <= 0 || bufferDuration <= 0) {
+      return res.status(400).json({
+        status: false,
+        message: "Durations must be positive. Please check timestamps.",
+      });
+    }
 
     let code, arvCode, tmcCode;
     do {
@@ -97,7 +74,6 @@ export const createTMCTarget = async (req, res, next) => {
 
     await newTMCTarget.save();
 
-    // Mark images as used
     await markImageAsUsed(targetImage);
     for (const image of controlImages) {
       await markImageAsUsed(image);

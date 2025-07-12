@@ -2,6 +2,7 @@ import { ARVTarget } from "../model/arvTarget.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import {
   startNextGameService,
+  updateAddToQueueService,
   updateGameTimeService,
   updateMakeCompleteService,
   updateMakeInActiveService,
@@ -26,8 +27,7 @@ export const createARVTarget = async (req, res, next) => {
   } = req.body;
 
   try {
-    let code;
-    let arvCode, tmcCode;
+    let code, arvCode, tmcCode;
 
     do {
       code = generateCode();
@@ -44,17 +44,10 @@ export const createARVTarget = async (req, res, next) => {
     const outcomeDuration = Math.round((outcome - reveal) / 60000);
     const bufferDuration = Math.round((buffer - gameStart) / 60000);
 
-    if (reveal >= outcome) {
+    if (revealDuration <= 0 || outcomeDuration <= 0 || bufferDuration <= 0) {
       return res.status(400).json({
         status: false,
-        message: "Outcome time must be after reveal time",
-      });
-    }
-
-    if (outcome >= buffer) {
-      return res.status(400).json({
-        status: false,
-        message: "Buffer time must be after outcome time",
+        message: "Durations must be positive. Please check timestamps.",
       });
     }
 
@@ -77,7 +70,6 @@ export const createARVTarget = async (req, res, next) => {
 
     await newARVTarget.save();
 
-    // Mark all used images
     await markImageAsUsed(image1);
     await markImageAsUsed(image2);
     await markImageAsUsed(image3);
