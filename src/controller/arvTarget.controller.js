@@ -12,6 +12,13 @@ import { generateCode } from "../utils/generateCode.js";
 import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
 import { Notification } from "../model/notification.model.js";
 
+function getDurationInMinutesToTargetTime(targetDateTime) {
+  const nowUTC = new Date(new Date().toISOString());
+  const target = new Date(targetDateTime);
+  const diffMs = target.getTime() - nowUTC.getTime();
+  return Math.max(0, Math.floor(diffMs / 60000));
+}
+
 export const createARVTarget = async (req, res, next) => {
   const {
     eventName,
@@ -35,30 +42,18 @@ export const createARVTarget = async (req, res, next) => {
       tmcCode = await TMCTarget.findOne({ code });
     } while (arvCode || tmcCode);
 
-    const gameStart = new Date(gameTime);
-    const reveal = new Date(revealTime);
-    const outcome = new Date(outcomeTime);
-    const buffer = new Date(bufferTime);
-
-    const revealDuration = Math.round((reveal - gameStart) / 60000);
-    const outcomeDuration = Math.round((outcome - reveal) / 60000);
-    const bufferDuration = Math.round((buffer - gameStart) / 60000);
-
-    if (revealDuration <= 0 || outcomeDuration <= 0 || bufferDuration <= 0) {
-      return res.status(400).json({
-        status: false,
-        message: "Durations must be positive. Please check timestamps.",
-      });
-    }
+    const revealDuration = getDurationInMinutesToTargetTime(revealTime);
+    const outcomeDuration = getDurationInMinutesToTargetTime(outcomeTime);
+    const bufferDuration = getDurationInMinutesToTargetTime(bufferTime);
 
     const newARVTarget = new ARVTarget({
       code,
       eventName,
       eventDescription,
-      gameTime: gameStart,
-      revealTime: reveal,
-      outcomeTime: outcome,
-      bufferTime: buffer,
+      gameTime: new Date(gameTime),
+      revealTime: new Date(revealTime),
+      outcomeTime: new Date(outcomeTime),
+      bufferTime: new Date(bufferTime),
       revealDuration,
       outcomeDuration,
       bufferDuration,
@@ -95,7 +90,7 @@ export const getAllARVTargets = async (req, res, next) => {
       ARVTarget.countDocuments(),
       ARVTarget.find()
         .select(
-          "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+          "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
         )
         .skip(skip)
         .limit(limit),
@@ -137,7 +132,7 @@ export const getAllQueuedARVTargets = async (req, res, next) => {
         isPartiallyActive: false,
       })
         .select(
-          "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+          "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
         )
         .skip(skip)
         .limit(limit),
@@ -180,7 +175,7 @@ export const getAllUnQueuedARVTargets = async (req, res, next) => {
         isPartiallyActive: false,
       })
         .select(
-          "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+          "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
         )
         .sort(sort) // Add sorting
         .skip(skip)
@@ -354,7 +349,7 @@ export const getPendingOutcomeGames = async (req, res, next) => {
       resultImage: { $exists: false },
       isCompleted: false,
     }).select(
-      "-__v code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+      "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
     );
 
     return res.status(200).json({

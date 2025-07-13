@@ -36,29 +36,24 @@ export const markImageAsUsed = async (image) => {
   );
 };
 
+function getDurationInMinutesToTargetTime(targetDateTime) {
+  const nowUTC = new Date(new Date().toISOString());
+  const target = new Date(targetDateTime);
+  const diffMs = target.getTime() - nowUTC.getTime();
+  return Math.max(0, Math.floor(diffMs / 60000));
+}
+
 export const createTMCTarget = async (req, res, next) => {
   const { targetImage, controlImages, gameStart, revealTime, bufferTime } =
     req.body;
 
   try {
-    const gameStartTime = new Date(gameStart);
-    const revealDateTime = new Date(revealTime);
-    const bufferDateTime = new Date(bufferTime);
-
-    const gameDuration = Math.round((revealDateTime - gameStartTime) / 60000);
-    const revealDuration = Math.round(
-      (bufferDateTime - revealDateTime) / 60000
-    );
-    const bufferDuration = gameDuration + revealDuration;
-
-    if (gameDuration <= 0 || revealDuration <= 0 || bufferDuration <= 0) {
-      return res.status(400).json({
-        status: false,
-        message: "Durations must be positive. Please check timestamps.",
-      });
-    }
+    const gameDuration = getDurationInMinutesToTargetTime(gameStart);
+    const revealDuration = getDurationInMinutesToTargetTime(revealTime);
+    const bufferDuration = getDurationInMinutesToTargetTime(bufferTime);
 
     let code, arvCode, tmcCode;
+
     do {
       code = generateCode();
       arvCode = await ARVTarget.findOne({ code });
@@ -69,7 +64,7 @@ export const createTMCTarget = async (req, res, next) => {
       code,
       targetImage,
       controlImages,
-      startTime: gameStartTime,
+      startTime: new Date(gameStart),
       gameDuration,
       revealDuration,
       bufferDuration,
@@ -101,7 +96,7 @@ export const getAllTMCTargets = async (req, res, next) => {
   try {
     const [totalItems, TMCTargets] = await Promise.all([
       TMCTarget.countDocuments(),
-      TMCTarget.find().select("-__v").skip(skip).limit(limit),
+      TMCTarget.find().skip(skip).limit(limit),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -139,7 +134,6 @@ export const getAllQueuedTMCTargets = async (req, res, next) => {
         isActive: false,
         isPartiallyActive: false,
       })
-        .select("-__v")
         .skip(skip)
         .limit(limit),
     ]);
@@ -172,7 +166,6 @@ export const getAllUnQueuedTMCTargets = async (req, res, next) => {
     const [totalItems, TMCTargets] = await Promise.all([
       TMCTarget.countDocuments({ isQueued: false, isActive: false }),
       TMCTarget.find({ isQueued: false, isActive: false })
-        .select("-__v")
         .sort(sort) // Add sorting
         .skip(skip)
         .limit(limit),
@@ -200,9 +193,7 @@ export const getActiveTMCTarget = async (_, res, next) => {
   try {
     const activeTMCTarget = await TMCTarget.findOne({
       $or: [{ isActive: true }, { isPartiallyActive: true }],
-    })
-      .select("-__v")
-      .lean();
+    }).lean();
 
     return res.status(200).json({
       status: true,

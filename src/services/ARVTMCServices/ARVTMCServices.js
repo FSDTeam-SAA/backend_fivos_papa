@@ -117,14 +117,14 @@ export const startNextGameFromCron = async (
       isActive: true,
       isCompleted: false,
     });
-    if (activeGame) return;
+    if (activeGame) return null; // No game started
 
     const nextGame = await model.findOne({
       isCompleted: false,
       isQueued: true,
     });
 
-    if (!nextGame) return;
+    if (!nextGame) return null; // No game to start
 
     const now = new Date();
     let updateFields;
@@ -177,8 +177,12 @@ export const startNextGameFromCron = async (
         targetCode: startedGame.code,
       });
     }
+
+    // Return started game so caller can use it
+    return startedGame;
   } catch (error) {
     log("Cron Error in startNextGameFromCron:", error);
+    return null;
   }
 };
 
