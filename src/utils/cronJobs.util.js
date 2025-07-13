@@ -102,7 +102,12 @@ const checkARVGames = async (io) => {
       //   { new: true }
       // );
 
-      await startNextGameFromCron(ARVTarget, io, console.error, "ARV");
+      const nextGame = await startNextGameFromCron(
+        ARVTarget,
+        io,
+        console.error,
+        "ARV"
+      );
 
       if (nextGame) {
         await emitGlobalNotification(io, {
@@ -169,7 +174,12 @@ const checkTMCGames = async (io) => {
         //   { new: true }
         // );
 
-        await startNextGameFromCron(TMCTarget, io, console.error, "TMC");
+        const nextGame = await startNextGameFromCron(
+          TMCTarget,
+          io,
+          console.error,
+          "TMC"
+        );
 
         if (nextGame) {
           await emitGlobalNotification(io, {
