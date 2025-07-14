@@ -121,7 +121,7 @@ export const startNextGameFromCron = async (
     const nextGame = await model.findOne({
       isCompleted: false,
       isQueued: true,
-      // Remove `status: "queued"` to avoid unnecessary filter
+      $or: [{ status: "queued" }, { status: "inactive" }],
     });
 
     if (!nextGame) {
@@ -130,6 +130,15 @@ export const startNextGameFromCron = async (
     }
 
     console.log("✅ Found queued game:", nextGame.code);
+
+    const queued = await model.find({
+      isQueued: true,
+      isCompleted: false,
+    });
+    console.log(
+      "🧪 Queued games found:",
+      queued.map((g) => g.code)
+    );
 
     const now = new Date();
     let updateFields = {

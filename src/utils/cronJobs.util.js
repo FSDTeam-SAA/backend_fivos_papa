@@ -99,6 +99,8 @@ const checkARVGames = async (io) => {
         "ARV"
       );
 
+      console.log("✔Statring next ARV game...");
+
       if (nextGame) {
         await emitGlobalNotification(io, {
           message: `New ARV game ${nextGame.code} has started!`,
@@ -106,6 +108,8 @@ const checkARVGames = async (io) => {
         });
       }
     }
+
+    console.log("✔ Buffer time ended. Trying to start next ARV game...");
   } catch (error) {
     console.error("Error in ARV game cron:", error);
   }
@@ -133,8 +137,9 @@ const checkTMCGames = async (io) => {
     const gameStart = new Date(startTime).getTime();
     const gameEnd = gameStart + gameDuration * 60000;
     const revealEnd = gameEnd + revealDuration * 60000;
-    const bufferEnd =
-      gameStart + (gameDuration + revealDuration + bufferDuration) * 60000;
+    const bufferEnd = new Date(
+      activeGame.bufferTime || activeGame.bufferEndTime
+    ).getTime();
 
     // 1. Game expired & complete
     if (now.getTime() >= bufferEnd) {
@@ -163,6 +168,8 @@ const checkTMCGames = async (io) => {
         console.error,
         "TMC"
       );
+
+      console.log("🚀 Calling startNextGameFromCron for TMC...");
 
       if (nextGame) {
         await emitGlobalNotification(io, {
