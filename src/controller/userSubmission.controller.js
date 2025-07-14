@@ -169,7 +169,7 @@ export const submitTMCGame = async (req, res, next) => {
         status: false,
         message: "Game time has ended",
         details: {
-          lastSubmissionTime: TMC.gameTime,
+          lastSubmissionTime: TMC.startTime,
           currentTime: currentTime,
         },
       });

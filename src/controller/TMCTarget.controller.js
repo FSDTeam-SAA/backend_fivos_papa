@@ -36,22 +36,16 @@ export const markImageAsUsed = async (image) => {
   );
 };
 
-function getDurationInMinutesToTargetTime(targetDateTime) {
-  const nowUTC = new Date(new Date().toISOString());
-  const target = new Date(targetDateTime);
-  const diffMs = target.getTime() - nowUTC.getTime();
-  return Math.max(0, Math.floor(diffMs / 60000));
-}
-
 export const createTMCTarget = async (req, res, next) => {
-  const { targetImage, controlImages, gameStart, revealTime, bufferTime } =
-    req.body;
+  const {
+    targetImage,
+    controlImages,
+    gameDuration,
+    revealDuration,
+    bufferDuration,
+  } = req.body;
 
   try {
-    const gameDuration = getDurationInMinutesToTargetTime(gameStart);
-    const revealDuration = getDurationInMinutesToTargetTime(revealTime);
-    const bufferDuration = getDurationInMinutesToTargetTime(bufferTime);
-
     let code, arvCode, tmcCode;
 
     do {
@@ -64,7 +58,6 @@ export const createTMCTarget = async (req, res, next) => {
       code,
       targetImage,
       controlImages,
-      startTime: new Date(gameStart),
       gameDuration,
       revealDuration,
       bufferDuration,

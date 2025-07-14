@@ -1,6 +1,9 @@
 import { CompletedTargets } from "../../model/completedTargets.model.js";
 import { Notification } from "../../model/notification.model.js";
 
+const addMinutes = (start, minutes) =>
+  new Date(start.getTime() + minutes * 60000);
+
 const checkIsGameActive = async (model, id, message, res, next) => {
   try {
     let isGameActive;
@@ -50,45 +53,35 @@ export const startNextGameService = async (model, res, next, gameName) => {
     }
 
     const now = new Date();
+    let updateFields = {
+      isQueued: false,
+      isActive: true,
+      isPartiallyActive: true,
+      status: "active",
+    };
 
-    // Update timing fields based on current time
-    let updateFields;
     if (gameName === "TMC") {
-      const gameEnd = new Date(now.getTime() + nextGame.gameDuration * 60000);
-      const revealEnd = new Date(
-        gameEnd.getTime() + nextGame.revealDuration * 60000
-      );
-      updateFields = {
-        startTime: now,
-        isQueued: false,
-        isActive: true,
-        isPartiallyActive: true,
-        status: "active",
-        bufferTime: revealEnd,
-      };
+      const gameEnd = addMinutes(now, nextGame.gameDuration);
+      const revealEnd = addMinutes(gameEnd, nextGame.revealDuration);
+      const bufferEnd = addMinutes(revealEnd, nextGame.bufferDuration);
+
+      updateFields.startTime = now;
+      updateFields.bufferTime = bufferEnd;
     } else if (gameName === "ARV") {
-      const reveal = new Date(now.getTime() + nextGame.revealDuration * 60000);
-      const outcome = new Date(
-        reveal.getTime() + nextGame.outcomeDuration * 60000
-      );
-      const buffer = new Date(
-        outcome.getTime() + nextGame.bufferDuration * 60000
-      );
-      updateFields = {
-        gameTime: now,
-        revealTime: reveal,
-        outcomeTime: outcome,
-        bufferTime: buffer,
-        isQueued: false,
-        isActive: true,
-        isPartiallyActive: true,
-        status: "active",
-      };
+      const gameStart = now;
+      const revealTime = addMinutes(gameStart, nextGame.revealDuration);
+      const outcomeTime = addMinutes(revealTime, nextGame.outcomeDuration);
+      const bufferTime = addMinutes(outcomeTime, nextGame.bufferDuration);
+
+      updateFields.gameTime = gameStart;
+      updateFields.revealTime = revealTime;
+      updateFields.outcomeTime = outcomeTime;
+      updateFields.bufferTime = bufferTime;
     }
 
     const startedGame = await model
       .findByIdAndUpdate(nextGame._id, updateFields, { new: true })
-      .select("-createdAt -updatedAt -__v")
+      .select("-__v")
       .lean();
 
     await Notification.create({
@@ -113,53 +106,64 @@ export const startNextGameFromCron = async (
   gameName
 ) => {
   try {
+    console.log(`🧪 [${gameName}] Cron trying to start next game`);
+
     const activeGame = await model.findOne({
       isActive: true,
       isCompleted: false,
     });
-    if (activeGame) return null; // No game started
+
+    if (activeGame) {
+      console.log("❌ Active game already running, skipping");
+      return null;
+    }
 
     const nextGame = await model.findOne({
       isCompleted: false,
       isQueued: true,
+      $or: [{ status: "queued" }, { status: "inactive" }],
     });
 
-    if (!nextGame) return null; // No game to start
+    if (!nextGame) {
+      console.log("❌ No queued game found");
+      return null;
+    }
+
+    console.log("✅ Found queued game:", nextGame.code);
+
+    const queued = await model.find({
+      isQueued: true,
+      isCompleted: false,
+    });
+    console.log(
+      "🧪 Queued games found:",
+      queued.map((g) => g.code)
+    );
 
     const now = new Date();
-    let updateFields;
+    let updateFields = {
+      isQueued: false,
+      isActive: true,
+      isPartiallyActive: true,
+      status: "active",
+    };
 
     if (gameName === "TMC") {
-      const gameEnd = new Date(now.getTime() + nextGame.gameDuration * 60000);
-      const revealEnd = new Date(
-        gameEnd.getTime() + nextGame.revealDuration * 60000
-      );
-      updateFields = {
-        startTime: now,
-        isQueued: false,
-        isActive: true,
-        isPartiallyActive: true,
-        status: "active",
-        bufferTime: revealEnd,
-      };
+      const gameEnd = addMinutes(now, nextGame.gameDuration);
+      const revealEnd = addMinutes(gameEnd, nextGame.revealDuration);
+      const bufferEnd = addMinutes(revealEnd, nextGame.bufferDuration);
+
+      updateFields.startTime = now;
+      updateFields.bufferTime = bufferEnd;
     } else if (gameName === "ARV") {
-      const reveal = new Date(now.getTime() + nextGame.revealDuration * 60000);
-      const outcome = new Date(
-        reveal.getTime() + nextGame.outcomeDuration * 60000
-      );
-      const buffer = new Date(
-        outcome.getTime() + nextGame.bufferDuration * 60000
-      );
-      updateFields = {
-        gameTime: now,
-        revealTime: reveal,
-        outcomeTime: outcome,
-        bufferTime: buffer,
-        isQueued: false,
-        isActive: true,
-        isPartiallyActive: true,
-        status: "active",
-      };
+      const revealTime = addMinutes(now, nextGame.revealDuration);
+      const outcomeTime = addMinutes(revealTime, nextGame.outcomeDuration);
+      const bufferTime = addMinutes(outcomeTime, nextGame.bufferDuration);
+
+      updateFields.gameTime = now;
+      updateFields.revealTime = revealTime;
+      updateFields.outcomeTime = outcomeTime;
+      updateFields.bufferTime = bufferTime;
     }
 
     const startedGame = await model
@@ -171,14 +175,13 @@ export const startNextGameFromCron = async (
       targetCode: startedGame.code,
     });
 
-    if (io) {
-      io.emit("notification", {
-        message: `New ${gameName} game ${startedGame.code} has started!`,
-        targetCode: startedGame.code,
-      });
-    }
+    io?.emit("notification", {
+      message: `New ${gameName} game ${startedGame.code} has started!`,
+      targetCode: startedGame.code,
+    });
 
-    // Return started game so caller can use it
+    console.log("🔥 Starting next queued game:", startedGame.code);
+
     return startedGame;
   } catch (error) {
     log("Cron Error in startNextGameFromCron:", error);
@@ -191,19 +194,19 @@ export const updateAddToQueueService = async (
   model,
   res,
   next,
-  gameDuration
+  gameName
 ) => {
   try {
-    const { startTime } = await model.findById(id).select("startTime");
+    const field = gameName === "TMC" ? "startTime" : "gameTime";
 
-    const gameStartTime = new Date(startTime);
-    const gameEndTime = new Date(gameStartTime);
-    gameEndTime.setMinutes(gameEndTime.getMinutes() + gameDuration);
+    const doc = await model.findById(id).select(field);
+    const startTime = new Date(doc[field]);
 
-    if (gameEndTime.getTime() < Date.now()) {
+    const now = new Date();
+    if (startTime.getTime() < now.getTime()) {
       return res.status(403).json({
         status: false,
-        message: "Game duration already passed",
+        message: "Start time is in the past. Can't queue this game.",
       });
     }
 
@@ -297,14 +300,24 @@ export const updateMakeCompleteService = async (
   next
 ) => {
   try {
-    const doc = await model
-      .findById(id)
-      .select("startTime gameDuration revealDuration bufferDuration");
+    const doc = await model.findById(id).lean();
 
-    const totalMinutes =
-      doc.gameDuration + doc.revealDuration + doc.bufferDuration;
-    const bufferEnd = new Date(doc.startTime);
-    bufferEnd.setMinutes(bufferEnd.getMinutes() + totalMinutes);
+    let totalMinutes;
+
+    if (targetName === "tmc") {
+      totalMinutes = doc.gameDuration + doc.revealDuration + doc.bufferDuration;
+    } else if (targetName === "arv") {
+      totalMinutes =
+        doc.revealDuration + doc.outcomeDuration + doc.bufferDuration;
+    } else {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid target name",
+      });
+    }
+
+    const baseTime = doc.startTime || doc.gameTime; // TMC: startTime | ARV: gameTime
+    const bufferEnd = addMinutes(new Date(baseTime), totalMinutes);
 
     if (Date.now() < bufferEnd.getTime()) {
       return res.status(403).json({

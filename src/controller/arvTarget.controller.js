@@ -12,21 +12,14 @@ import { generateCode } from "../utils/generateCode.js";
 import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
 import { Notification } from "../model/notification.model.js";
 
-function getDurationInMinutesToTargetTime(targetDateTime) {
-  const nowUTC = new Date(new Date().toISOString());
-  const target = new Date(targetDateTime);
-  const diffMs = target.getTime() - nowUTC.getTime();
-  return Math.max(0, Math.floor(diffMs / 60000));
-}
-
 export const createARVTarget = async (req, res, next) => {
   const {
     eventName,
     eventDescription,
-    gameTime,
-    revealTime,
-    outcomeTime,
-    bufferTime,
+    gameDuration, // in minutes
+    revealDuration, // in minutes
+    outcomeDuration, // in minutes
+    bufferDuration, // in minutes
     image1,
     image2,
     image3,
@@ -42,18 +35,11 @@ export const createARVTarget = async (req, res, next) => {
       tmcCode = await TMCTarget.findOne({ code });
     } while (arvCode || tmcCode);
 
-    const revealDuration = getDurationInMinutesToTargetTime(revealTime);
-    const outcomeDuration = getDurationInMinutesToTargetTime(outcomeTime);
-    const bufferDuration = getDurationInMinutesToTargetTime(bufferTime);
-
     const newARVTarget = new ARVTarget({
       code,
       eventName,
       eventDescription,
-      gameTime: new Date(gameTime),
-      revealTime: new Date(revealTime),
-      outcomeTime: new Date(outcomeTime),
-      bufferTime: new Date(bufferTime),
+      gameDuration,
       revealDuration,
       outcomeDuration,
       bufferDuration,
@@ -61,6 +47,7 @@ export const createARVTarget = async (req, res, next) => {
       image2,
       image3,
       controlImage,
+      status: "inactive",
     });
 
     await newARVTarget.save();
