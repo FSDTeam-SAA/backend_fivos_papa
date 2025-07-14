@@ -8,10 +8,14 @@ const TMCTargetSchema = new Schema(
     targetImage: { type: String },
     controlImages: [{ type: String }],
 
+    // Calculated timestamps (managed by system)
     startTime: { type: Date },
-    gameDuration: { type: Number },
-    revealDuration: { type: Number },
-    bufferDuration: { type: Number },
+    revealTime: { type: Date },
+    bufferEndTime: { type: Date },
+
+    gameDuration: { type: Number, required: true },
+    revealDuration: { type: Number, required: true },
+    bufferDuration: { type: Number, required: true },
 
     isActive: { type: Boolean, default: false },
     isPartiallyActive: { type: Boolean, default: false },
