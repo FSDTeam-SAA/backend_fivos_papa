@@ -9,7 +9,7 @@ import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import "./src/jobs/notificationJob.js";
-import "./src/utils/cronJobs.util.js";
+import { initCronJobs } from "./src/utils/cronJobs.util.js";
 
 dotenv.config();
 
@@ -93,6 +93,7 @@ import OAuthRoute from "./src/route/OAuth.route.js";
 import contactUsRoute from "./src/route/contactUs.route.js";
 import notificationRoute from "./src/route/notification.route.js";
 import homeRoute from "./src/route/home.route.js";
+import { GameQueue } from "./src/model/gameQueue.model.js";
 
 // set
 app.use("/api/v1/user", userRoute);
@@ -116,13 +117,33 @@ app.use("/api/v1/home", homeRoute);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
+// Initialize cron jobs
+initCronJobs(io);
+
 // Start server
-server.listen(PORT, async () => {
-  try {
-    await dbconfig();
-    console.log(`Server is running at http://localhost:${PORT}`);
-  } catch (error) {
-    console.error("Database connection failed:", error);
-    process.exit(1);
-  }
-});
+async function initializeApp() {
+  server.listen(PORT, async () => {
+    try {
+      await dbconfig();
+      console.log(`Server is running at http://localhost:${PORT}`);
+
+      // Initialize GameQueue
+      const queueId = "67da824e62d5a1b8cfece4c8";
+      const existingQueue = await GameQueue.findById(queueId);
+      if (!existingQueue) {
+        await GameQueue.create({
+          _id: queueId,
+          TMCTargets: [],
+          ARVTargets: [],
+          isTMCQueueActive: false,
+          isARVQueueActive: false,
+        });
+      }
+    } catch (error) {
+      console.error("Database connection failed:", error);
+      process.exit(1);
+    }
+  });
+}
+
+initializeApp();

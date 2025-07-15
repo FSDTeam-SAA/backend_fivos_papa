@@ -210,10 +210,7 @@ export const updateAddToQueue = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    const { gameDuration } = await TMCTarget.findById(id).select(
-      "gameDuration"
-    );
-    await updateAddToQueueService(id, TMCTarget, res, next, gameDuration);
+    await updateAddToQueueService(id, TMCTarget, "TMC", res, next);
   } catch (error) {
     next(error);
   }

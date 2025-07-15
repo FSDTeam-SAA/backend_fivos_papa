@@ -11,7 +11,7 @@ const TMCTargetSchema = new Schema(
     // Calculated timestamps (managed by system)
     startTime: { type: Date },
     revealTime: { type: Date },
-    bufferEndTime: { type: Date },
+    bufferTime: { type: Date },
 
     gameDuration: { type: Number, required: true },
     revealDuration: { type: Number, required: true },

@@ -1,30 +1,60 @@
 import { CompletedTargets } from "../../model/completedTargets.model.js";
+import { GameQueue } from "../../model/gameQueue.model.js";
 import { Notification } from "../../model/notification.model.js";
 
 const addMinutes = (start, minutes) =>
   new Date(start.getTime() + minutes * 60000);
 
-const checkIsGameActive = async (model, id, message, res, next) => {
+export const updateAddToQueueService = async (
+  id,
+  model,
+  gameName,
+  res,
+  next
+) => {
   try {
-    let isGameActive;
+    const game = await model
+      .findById(id)
+      .select("isActive isPartiallyActive isCompleted isQueued status");
 
-    if (id) {
-      isGameActive = await model.findOne({
-        _id: id,
-        $or: [{ isActive: true }, { isPartiallyActive: true }],
-      });
-    } else {
-      isGameActive = await model.findOne({
-        $or: [{ isActive: true }, { isPartiallyActive: true }],
-      });
+    if (!game) {
+      return res.status(404).json({ status: false, message: "Game not found" });
     }
 
-    if (isGameActive) {
-      return res.status(403).json({
-        status: false,
-        message,
-      });
+    if (game.isActive || game.isPartiallyActive) {
+      return res
+        .status(403)
+        .json({ status: false, message: "Cannot queue an active game" });
     }
+
+    if (game.isCompleted) {
+      return res
+        .status(403)
+        .json({ status: false, message: "Cannot queue a completed game" });
+    }
+
+    if (game.isQueued) {
+      return res
+        .status(400)
+        .json({ status: false, message: "Game is already queued" });
+    }
+
+    await model.findByIdAndUpdate(
+      id,
+      { isQueued: true, status: "queued" },
+      { new: true }
+    );
+
+    const queueField = gameName === "TMC" ? "TMCTargets" : "ARVTargets";
+    await GameQueue.findOneAndUpdate(
+      { _id: "67da824e62d5a1b8cfece4c8" },
+      { $push: { [queueField]: id } },
+      { upsert: true }
+    );
+
+    return res
+      .status(200)
+      .json({ status: true, message: "Added to queue successfully" });
   } catch (error) {
     next(error);
   }
@@ -32,57 +62,73 @@ const checkIsGameActive = async (model, id, message, res, next) => {
 
 export const startNextGameService = async (model, res, next, gameName) => {
   try {
-    await checkIsGameActive(
-      model,
-      null,
-      "Currently a game is running",
-      res,
-      next
-    );
-
-    const nextGame = await model.findOne({
-      isCompleted: false,
-      isQueued: true,
+    const activeGame = await model.findOne({
+      $or: [{ isActive: true }, { isPartiallyActive: true }],
     });
+    if (activeGame) {
+      return res
+        .status(403)
+        .json({ status: false, message: "Currently a game is running" });
+    }
 
+    const queueField = gameName === "TMC" ? "TMCTargets" : "ARVTargets";
+    const queueActiveField =
+      gameName === "TMC" ? "isTMCQueueActive" : "isARVQueueActive";
+    const queue = await GameQueue.findById("67da824e62d5a1b8cfece4c8");
+    if (!queue || !queue[queueField].length) {
+      return res
+        .status(404)
+        .json({ status: false, message: "No game is queued right now" });
+    }
+
+    const nextGameId = queue[queueField][0];
+    const nextGame = await model.findById(nextGameId).lean();
     if (!nextGame) {
-      return res.status(404).json({
-        status: false,
-        message: "No game is queued right now",
+      await GameQueue.findByIdAndUpdate("67da824e62d5a1b8cfece4c8", {
+        $pull: { [queueField]: nextGameId },
       });
+      return res
+        .status(404)
+        .json({ status: false, message: "Queued game not found" });
     }
 
     const now = new Date();
     let updateFields = {
-      isQueued: false,
       isActive: true,
       isPartiallyActive: true,
       status: "active",
+      isQueued: false,
     };
 
     if (gameName === "TMC") {
-      const gameEnd = addMinutes(now, nextGame.gameDuration);
-      const revealEnd = addMinutes(gameEnd, nextGame.revealDuration);
-      const bufferEnd = addMinutes(revealEnd, nextGame.bufferDuration);
-
       updateFields.startTime = now;
-      updateFields.bufferTime = bufferEnd;
+      updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
+      updateFields.bufferTime = addMinutes(
+        updateFields.revealTime,
+        nextGame.revealDuration
+      );
     } else if (gameName === "ARV") {
-      const gameStart = now;
-      const revealTime = addMinutes(gameStart, nextGame.revealDuration);
-      const outcomeTime = addMinutes(revealTime, nextGame.outcomeDuration);
-      const bufferTime = addMinutes(outcomeTime, nextGame.bufferDuration);
-
-      updateFields.gameTime = gameStart;
-      updateFields.revealTime = revealTime;
-      updateFields.outcomeTime = outcomeTime;
-      updateFields.bufferTime = bufferTime;
+      updateFields.gameTime = now;
+      updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
+      updateFields.outcomeTime = addMinutes(
+        updateFields.revealTime,
+        nextGame.revealDuration
+      );
+      updateFields.bufferTime = addMinutes(
+        updateFields.outcomeTime,
+        nextGame.outcomeDuration
+      );
     }
 
     const startedGame = await model
-      .findByIdAndUpdate(nextGame._id, updateFields, { new: true })
+      .findByIdAndUpdate(nextGameId, updateFields, { new: true })
       .select("-__v")
       .lean();
+
+    await GameQueue.findByIdAndUpdate("67da824e62d5a1b8cfece4c8", {
+      $pull: { [queueField]: nextGameId },
+      $set: { [queueActiveField]: true },
+    });
 
     await Notification.create({
       message: `New ${gameName} game has started`,
@@ -99,145 +145,114 @@ export const startNextGameService = async (model, res, next, gameName) => {
   }
 };
 
-export const startNextGameFromCron = async (
-  model,
-  io,
-  log = console.error,
-  gameName
-) => {
+export const startNextGameFromCron = async (model, io, log, gameName) => {
   try {
-    console.log(`🧪 [${gameName}] Cron trying to start next game`);
+    const queueField = gameName === "TMC" ? "TMCTargets" : "ARVTargets";
+    const queueActiveField =
+      gameName === "TMC" ? "isTMCQueueActive" : "isARVQueueActive";
+    const queue = await GameQueue.findById("67da824e62d5a1b8cfece4c8");
+    if (!queue || !queue[queueActiveField] || !queue[queueField].length) {
+      return null;
+    }
 
-    const activeGame = await model.findOne({
-      isActive: true,
-      isCompleted: false,
-    });
-
+    const activeGame = await model
+      .findOne({
+        $or: [{ isActive: true }, { isPartiallyActive: true }],
+        isCompleted: false,
+      })
+      .lean();
     if (activeGame) {
-      console.log("❌ Active game already running, skipping");
       return null;
     }
 
-    const nextGame = await model.findOne({
-      isCompleted: false,
-      isQueued: true,
-      $or: [{ status: "queued" }, { status: "inactive" }],
-    });
-
+    const nextGameId = queue[queueField][0];
+    const nextGame = await model.findById(nextGameId).lean();
     if (!nextGame) {
-      console.log("❌ No queued game found");
+      await GameQueue.findByIdAndUpdate("67da824e62d5a1b8cfece4c8", {
+        $pull: { [queueField]: nextGameId },
+      });
       return null;
     }
-
-    console.log("✅ Found queued game:", nextGame.code);
-
-    const queued = await model.find({
-      isQueued: true,
-      isCompleted: false,
-    });
-    console.log(
-      "🧪 Queued games found:",
-      queued.map((g) => g.code)
-    );
 
     const now = new Date();
     let updateFields = {
-      isQueued: false,
       isActive: true,
       isPartiallyActive: true,
       status: "active",
+      isQueued: false,
     };
 
     if (gameName === "TMC") {
-      const gameEnd = addMinutes(now, nextGame.gameDuration);
-      const revealEnd = addMinutes(gameEnd, nextGame.revealDuration);
-      const bufferEnd = addMinutes(revealEnd, nextGame.bufferDuration);
-
       updateFields.startTime = now;
-      updateFields.bufferTime = bufferEnd;
+      updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
+      updateFields.bufferTime = addMinutes(
+        updateFields.revealTime,
+        nextGame.revealDuration
+      );
     } else if (gameName === "ARV") {
-      const revealTime = addMinutes(now, nextGame.revealDuration);
-      const outcomeTime = addMinutes(revealTime, nextGame.outcomeDuration);
-      const bufferTime = addMinutes(outcomeTime, nextGame.bufferDuration);
-
       updateFields.gameTime = now;
-      updateFields.revealTime = revealTime;
-      updateFields.outcomeTime = outcomeTime;
-      updateFields.bufferTime = bufferTime;
+      updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
+      updateFields.outcomeTime = addMinutes(
+        updateFields.revealTime,
+        nextGame.revealDuration
+      );
+      updateFields.bufferTime = addMinutes(
+        updateFields.outcomeTime,
+        nextGame.outcomeDuration
+      );
     }
 
     const startedGame = await model
-      .findByIdAndUpdate(nextGame._id, updateFields, { new: true })
+      .findByIdAndUpdate(nextGameId, updateFields, { new: true })
       .lean();
+
+    await GameQueue.findByIdAndUpdate("67da824e62d5a1b8cfece4c8", {
+      $pull: { [queueField]: nextGameId },
+    });
 
     await Notification.create({
       message: `New ${gameName} game has started`,
       targetCode: startedGame.code,
     });
 
-    io?.emit("notification", {
+    await emitGlobalNotification(io, {
       message: `New ${gameName} game ${startedGame.code} has started!`,
       targetCode: startedGame.code,
     });
 
-    console.log("🔥 Starting next queued game:", startedGame.code);
-
     return startedGame;
   } catch (error) {
-    log("Cron Error in startNextGameFromCron:", error);
     return null;
   }
 };
 
-export const updateAddToQueueService = async (
+export const updateRemoveFromQueueService = async (
   id,
   model,
+  gameName,
   res,
-  next,
-  gameName
+  next
 ) => {
   try {
-    const field = gameName === "TMC" ? "startTime" : "gameTime";
-
-    const doc = await model.findById(id).select(field);
-    const startTime = new Date(doc[field]);
-
-    const now = new Date();
-    if (startTime.getTime() < now.getTime()) {
-      return res.status(403).json({
-        status: false,
-        message: "Start time is in the past. Can't queue this game.",
-      });
+    const game = await model.findById(id).lean();
+    if (!game) {
+      return res.status(404).json({ status: false, message: "Game not found" });
     }
 
     await model.findByIdAndUpdate(
       id,
-      { isQueued: true, status: "queued" },
+      { isQueued: false, status: "inactive" },
       { new: true }
     );
 
-    return res.status(200).json({
-      status: true,
-      message: "Added to queue successfully",
+    const queueField = gameName === "TMC" ? "TMCTargets" : "ARVTargets";
+    await GameQueue.findByIdAndUpdate("67da824e62d5a1b8cfece4c8", {
+      $pull: { [queueField]: id },
     });
-  } catch (error) {
-    next(error);
-  }
-};
 
-export const updateRemoveFromQueueService = async (id, model, res, next) => {
-  try {
-    await model
-      .findByIdAndUpdate(
-        id,
-        { isQueued: false, status: "inactive" },
-        { new: true }
-      )
-      .lean();
-    return res.status(200).json({
-      status: true,
-      message: "Removed from queue successfully",
-    });
+    return res
+      .status(200)
+      .json({ status: true, message: "Removed from queue successfully" });
   } catch (error) {
     next(error);
   }
@@ -245,20 +260,43 @@ export const updateRemoveFromQueueService = async (id, model, res, next) => {
 
 export const updateGameTimeService = async (id, gameTime, model, res, next) => {
   try {
-    const { revealTime } = await model.findById(id).select("revealTime");
+    const doc = await model
+      .findById(id)
+      .select("gameDuration revealDuration outcomeDuration bufferDuration");
+    const now = new Date();
+    const gameStart = new Date(gameTime);
 
-    if (new Date(revealTime).getTime() < new Date(gameTime).getTime()) {
+    if (gameStart.getTime() < now.getTime()) {
       return res.status(400).json({
         status: false,
-        message: "Reveal time should be in the future or equal to game time",
+        message: "Game time cannot be in the past",
       });
     }
 
-    await model.findByIdAndUpdate(id, { gameTime });
-    return res.status(200).json({
-      status: true,
-      message: "Game time updated successfully",
-    });
+    let updateFields = { gameTime };
+    if (model.modelName === "ARVTarget") {
+      updateFields.revealTime = addMinutes(gameTime, doc.gameDuration);
+      updateFields.outcomeTime = addMinutes(
+        updateFields.revealTime,
+        doc.revealDuration
+      );
+      updateFields.bufferTime = addMinutes(
+        updateFields.outcomeTime,
+        doc.outcomeDuration
+      );
+    } else if (model.modelName === "TMCTarget") {
+      updateFields.startTime = gameTime;
+      updateFields.revealTime = addMinutes(gameTime, doc.gameDuration);
+      updateFields.bufferTime = addMinutes(
+        updateFields.revealTime,
+        doc.revealDuration
+      );
+    }
+
+    await model.findByIdAndUpdate(id, updateFields, { new: true });
+    return res
+      .status(200)
+      .json({ status: true, message: "Game time updated successfully" });
   } catch (error) {
     next(error);
   }
@@ -266,10 +304,12 @@ export const updateGameTimeService = async (id, gameTime, model, res, next) => {
 
 export const updateMakeInActiveService = async (id, model, res, next) => {
   try {
-    const doc = await model.findById(id).select("startTime gameDuration");
-
-    const gameEnd = new Date(doc.startTime);
-    gameEnd.setMinutes(gameEnd.getMinutes() + doc.gameDuration);
+    const doc = await model
+      .findById(id)
+      .select("startTime gameTime gameDuration");
+    const baseTime =
+      model.modelName === "TMCTarget" ? doc.startTime : doc.gameTime;
+    const gameEnd = addMinutes(new Date(baseTime), doc.gameDuration);
 
     if (Date.now() < gameEnd.getTime()) {
       return res.status(403).json({
@@ -280,13 +320,12 @@ export const updateMakeInActiveService = async (id, model, res, next) => {
 
     await model.findByIdAndUpdate(
       id,
-      { isActive: false, isPartiallyActive: false },
+      { isActive: false, isPartiallyActive: true, status: "revealed" },
       { new: true }
     );
-    return res.status(200).json({
-      status: true,
-      message: "Game inactivated successfully",
-    });
+    return res
+      .status(200)
+      .json({ status: true, message: "Game moved to revealed phase" });
   } catch (error) {
     next(error);
   }
@@ -301,22 +340,22 @@ export const updateMakeCompleteService = async (
 ) => {
   try {
     const doc = await model.findById(id).lean();
-
-    let totalMinutes;
-
-    if (targetName === "tmc") {
-      totalMinutes = doc.gameDuration + doc.revealDuration + doc.bufferDuration;
-    } else if (targetName === "arv") {
-      totalMinutes =
-        doc.revealDuration + doc.outcomeDuration + doc.bufferDuration;
-    } else {
-      return res.status(400).json({
+    if (!doc) {
+      return res.status(404).json({
         status: false,
-        message: "Invalid target name",
+        message: "Game not found",
       });
     }
 
-    const baseTime = doc.startTime || doc.gameTime; // TMC: startTime | ARV: gameTime
+    const baseTime =
+      model.modelName === "TMCTarget" ? doc.startTime : doc.gameTime;
+    const totalMinutes =
+      model.modelName === "TMCTarget"
+        ? doc.gameDuration + doc.revealDuration + doc.bufferDuration
+        : doc.gameDuration +
+          doc.revealDuration +
+          doc.outcomeDuration +
+          doc.bufferDuration;
     const bufferEnd = addMinutes(new Date(baseTime), totalMinutes);
 
     if (Date.now() < bufferEnd.getTime()) {
@@ -326,19 +365,32 @@ export const updateMakeCompleteService = async (
       });
     }
 
-    await model.findByIdAndUpdate(id, {
-      isCompleted: true,
-      isPartiallyActive: false,
-    });
+    const updatedGame = await model
+      .findByIdAndUpdate(
+        id,
+        {
+          isCompleted: true,
+          isActive: false,
+          isPartiallyActive: false,
+          status: "expired",
+          bufferTime: new Date(),
+        },
+        { new: true }
+      )
+      .lean();
 
-    await CompletedTargets.findByIdAndUpdate(
-      process.env.COMPLETED_TARGETS_DOCUMENT_ID,
-      { $push: { [targetName]: id } }
+    await CompletedTargets.findOneAndUpdate(
+      { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
+      { $push: { [targetName]: id } },
+      { upsert: true }
     );
+
+    await Notification.deleteMany({ targetCode: doc.code });
 
     return res.status(200).json({
       status: true,
-      message: "Target completed successfully",
+      message: "Target expired successfully",
+      data: updatedGame,
     });
   } catch (error) {
     next(error);

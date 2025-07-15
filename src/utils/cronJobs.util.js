@@ -7,7 +7,13 @@ import { Notification } from "../model/notification.model.js";
 import { emitGlobalNotification } from "../jobs/notificationJob.js";
 import { startNextGameFromCron } from "../services/ARVTMCServices/ARVTMCServices.js";
 
-// 🔹 Check inactive users and close their session
+const addMinutes = (start, minutes) => {
+  if (!start || isNaN(start.getTime())) {
+    return new Date();
+  }
+  return new Date(start.getTime() + minutes * 60000);
+};
+
 const checkInactiveUsers = async (io) => {
   const inactiveThreshold = 10 * 60 * 1000; // 10 minutes
   try {
@@ -37,195 +43,263 @@ const checkInactiveUsers = async (io) => {
     if (bulkOps.length > 0) {
       await User.bulkWrite(bulkOps);
     }
-  } catch (error) {
-    console.error("Error checking inactive users:", error);
-  }
+  } catch (error) {}
 };
 
-// 🔹 ARV game lifecycle manager
-const checkARVGames = async (io) => {
+const manageGameLifecycle = async (io, model, gameName) => {
   const now = new Date();
 
   try {
-    // 1. Move to "revealed" phase
-    const gamesToReveal = await ARVTarget.find({
-      revealTime: { $lte: now },
-      status: "active",
-    });
+    // Check for stuck games in revealed or completed phase
+    const stuckGames = await model
+      .find({
+        $or: [
+          { status: "revealed", isCompleted: false },
+          { status: "completed", isCompleted: false }, // For ARV
+        ],
+      })
+      .lean();
 
-    for (const game of gamesToReveal) {
-      await ARVTarget.findByIdAndUpdate(game._id, {
-        status: "revealed",
-        isActive: false,
-        isPartiallyActive: true,
-      });
+    if (stuckGames.length > 0) {
+      for (const game of stuckGames) {
+        const baseTime = gameName === "TMC" ? game.startTime : game.gameTime;
+        const revealEnd = baseTime
+          ? addMinutes(
+              new Date(baseTime),
+              game.gameDuration + game.revealDuration
+            )
+          : null;
+        const outcomeEnd =
+          gameName === "ARV" && revealEnd
+            ? addMinutes(revealEnd, game.outcomeDuration || 0)
+            : null;
+        const bufferEnd =
+          game.bufferTime ||
+          (gameName === "TMC"
+            ? addMinutes(revealEnd, game.bufferDuration)
+            : addMinutes(outcomeEnd, game.bufferDuration));
 
-      await emitGlobalNotification(io, {
-        message: `ARV game ${game.code} has been revealed!`,
-        targetCode: game.code,
-      });
-    }
+        if (!bufferEnd || now.getTime() >= bufferEnd.getTime()) {
+          await model.findByIdAndUpdate(game._id, {
+            isCompleted: true,
+            isActive: false,
+            isPartiallyActive: false,
+            status: "expired",
+            bufferTime: bufferEnd || now,
+          });
 
-    // 2. Move to "completed" phase
-    const toComplete = await ARVTarget.find({
-      bufferTime: { $lte: now },
-      isCompleted: false,
-    });
+          await CompletedTargets.findOneAndUpdate(
+            { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
+            {
+              $push: {
+                [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: game._id,
+              },
+            },
+            { upsert: true }
+          );
 
-    for (const game of toComplete) {
-      await ARVTarget.findByIdAndUpdate(game._id, {
-        status: "completed",
-        isCompleted: true,
-        isActive: false,
-        isPartiallyActive: false,
-      });
+          await Notification.deleteMany({ targetCode: game.code });
 
-      await CompletedTargets.findByIdAndUpdate(
-        process.env.COMPLETED_TARGETS_DOCUMENT_ID,
-        { $push: { ARVTargets: game._id } }
-      );
+          await emitGlobalNotification(io, {
+            message: `${gameName} game ${game.code} has expired (forced).`,
+            targetCode: game.code,
+          });
 
-      await Notification.deleteMany({ targetCode: game.code });
-
-      await emitGlobalNotification(io, {
-        message: `ARV game ${game.code} is completed.`,
-        targetCode: game.code,
-      });
-
-      const nextGame = await startNextGameFromCron(
-        ARVTarget,
-        io,
-        console.error,
-        "ARV"
-      );
-
-      console.log("✔Statring next ARV game...");
-
-      if (nextGame) {
-        await emitGlobalNotification(io, {
-          message: `New ARV game ${nextGame.code} has started!`,
-          targetCode: nextGame.code,
-        });
+          const nextGame = await startNextGameFromCron(
+            model,
+            io,
+            console.error,
+            gameName
+          );
+          if (nextGame) {
+            await emitGlobalNotification(io, {
+              message: `New ${gameName} game ${nextGame.code} has started!`,
+              targetCode: nextGame.code,
+            });
+          }
+        }
       }
     }
 
-    console.log("✔ Buffer time ended. Trying to start next ARV game...");
-  } catch (error) {
-    console.error("Error in ARV game cron:", error);
-  }
-};
+    // Check active games
+    const activeGames = await model
+      .find({
+        $or: [{ isActive: true }, { isPartiallyActive: true }],
+        isCompleted: false,
+      })
+      .lean();
 
-// 🔹 TMC game lifecycle manager
-const checkTMCGames = async (io) => {
-  const now = new Date();
-
-  try {
-    const activeGame = await TMCTarget.findOne({ isActive: true });
-
-    if (!activeGame) return;
-
-    const {
-      _id,
-      code,
-      startTime,
-      gameDuration,
-      revealDuration,
-      bufferDuration,
-      status,
-    } = activeGame;
-
-    const gameStart = new Date(startTime).getTime();
-    const gameEnd = gameStart + gameDuration * 60000;
-    const revealEnd = gameEnd + revealDuration * 60000;
-    const bufferEnd = new Date(
-      activeGame.bufferTime || activeGame.bufferEndTime
-    ).getTime();
-
-    // 1. Game expired & complete
-    if (now.getTime() >= bufferEnd) {
-      await TMCTarget.findByIdAndUpdate(_id, {
-        isCompleted: true,
-        isActive: false,
-        isPartiallyActive: false,
-        status: "expired",
-      });
-
-      await CompletedTargets.findByIdAndUpdate(
-        process.env.COMPLETED_TARGETS_DOCUMENT_ID,
-        { $push: { TMCTargets: _id } }
-      );
-
-      await Notification.deleteMany({ targetCode: code });
-
-      await emitGlobalNotification(io, {
-        message: `TMC game ${code} has ended. Final results are now available!`,
-        targetCode: code,
-      });
-
+    if (!activeGames.length && !stuckGames.length) {
       const nextGame = await startNextGameFromCron(
-        TMCTarget,
+        model,
         io,
         console.error,
-        "TMC"
+        gameName
       );
-
-      console.log("🚀 Calling startNextGameFromCron for TMC...");
-
       if (nextGame) {
         await emitGlobalNotification(io, {
-          message: `New TMC game ${nextGame.code} has started! Join now!`,
+          message: `New ${gameName} game ${nextGame.code} has started!`,
           targetCode: nextGame.code,
         });
       }
+      return;
     }
-    // 2. Reveal phase
-    else if (now.getTime() >= gameEnd && status === "active") {
-      await TMCTarget.findByIdAndUpdate(_id, {
-        status: "revealed",
-        isActive: false,
-        isPartiallyActive: true,
-      });
 
-      await emitGlobalNotification(io, {
-        message: `TMC game ${code} results have been revealed! Check your predictions!`,
-        targetCode: code,
-      });
-    }
-    // 3. Buffer stage nearing end (optional log)
-    else if (now.getTime() >= revealEnd && status === "revealed") {
-      await emitGlobalNotification(io, {
-        message: `TMC game ${code} is in final buffer stage.`,
-        targetCode: code,
-      });
-    }
-    // 4. Active reminder
-    else if (status === "active") {
-      const timeLeft = Math.ceil((gameEnd - now.getTime()) / 60000);
-      if (timeLeft % 15 === 0) {
+    for (const game of activeGames) {
+      const {
+        _id,
+        code,
+        gameTime,
+        startTime,
+        gameDuration,
+        revealDuration,
+        outcomeDuration,
+        bufferDuration,
+        status,
+      } = game;
+      const baseTime = gameName === "TMC" ? startTime : gameTime;
+
+      if (!baseTime || isNaN(baseTime.getTime())) {
+        await model.findByIdAndUpdate(_id, {
+          isCompleted: true,
+          isActive: false,
+          isPartiallyActive: false,
+          status: "expired",
+          bufferTime: now,
+        });
+
+        await CompletedTargets.findOneAndUpdate(
+          { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
+          {
+            $push: { [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: _id },
+          },
+          { upsert: true }
+        );
+
+        await Notification.deleteMany({ targetCode: code });
         await emitGlobalNotification(io, {
-          message: `TMC game ${code} is active! ${timeLeft} minutes remaining!`,
+          message: `${gameName} game ${code} has expired (forced due to invalid baseTime).`,
           targetCode: code,
         });
+
+        const nextGame = await startNextGameFromCron(
+          model,
+          io,
+          console.error,
+          gameName
+        );
+        if (nextGame) {
+          await emitGlobalNotification(io, {
+            message: `New ${gameName} game ${nextGame.code} has started!`,
+            targetCode: nextGame.code,
+          });
+        }
+        continue;
+      }
+
+      const gameEnd = addMinutes(new Date(baseTime), gameDuration);
+      const revealEnd = addMinutes(gameEnd, revealDuration);
+      const outcomeEnd =
+        gameName === "ARV" ? addMinutes(revealEnd, outcomeDuration || 0) : null;
+      const bufferEnd = addMinutes(
+        gameName === "TMC" ? revealEnd : outcomeEnd,
+        bufferDuration
+      );
+
+      if (now.getTime() >= gameEnd.getTime() && status === "active") {
+        await model.findByIdAndUpdate(_id, {
+          isActive: false,
+          isPartiallyActive: true,
+          status: "revealed",
+        });
+
+        await emitGlobalNotification(io, {
+          message: `${gameName} game ${code} has been revealed!`,
+          targetCode: code,
+        });
+      } else if (
+        gameName === "ARV" &&
+        now.getTime() >= revealEnd.getTime() &&
+        status === "revealed"
+      ) {
+        await model.findByIdAndUpdate(_id, {
+          isActive: false,
+          isPartiallyActive: true,
+          status: "completed",
+        });
+
+        await emitGlobalNotification(io, {
+          message: `${gameName} game ${code} has completed!`,
+          targetCode: code,
+        });
+      } else if (now.getTime() >= bufferEnd.getTime() && !game.isCompleted) {
+        await model.findByIdAndUpdate(_id, {
+          isCompleted: true,
+          isActive: false,
+          isPartiallyActive: false,
+          status: "expired",
+        });
+
+        await CompletedTargets.findOneAndUpdate(
+          { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
+          {
+            $push: { [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: _id },
+          },
+          { upsert: true }
+        );
+
+        await Notification.deleteMany({ targetCode: code });
+
+        await emitGlobalNotification(io, {
+          message: `${gameName} game ${code} has expired.`,
+          targetCode: code,
+        });
+
+        const nextGame = await startNextGameFromCron(
+          model,
+          io,
+          console.error,
+          gameName
+        );
+        if (nextGame) {
+          await emitGlobalNotification(io, {
+            message: `New ${gameName} game ${nextGame.code} has started!`,
+            targetCode: nextGame.code,
+          });
+        }
+      } else if (
+        (status === "revealed" && now.getTime() >= revealEnd.getTime()) ||
+        (gameName === "ARV" &&
+          status === "completed" &&
+          now.getTime() < bufferEnd.getTime())
+      ) {
+        await emitGlobalNotification(io, {
+          message: `${gameName} game ${code} is in ${
+            status === "revealed" ? "buffer" : "completed"
+          } stage.`,
+          targetCode: code,
+        });
+      } else if (status === "active") {
+        const timeLeft = Math.ceil((gameEnd.getTime() - now.getTime()) / 60000);
+        if (timeLeft > 0 && timeLeft % 5 === 0) {
+          await emitGlobalNotification(io, {
+            message: `${gameName} game ${code} is active! ${timeLeft} minutes remaining!`,
+            targetCode: code,
+          });
+        }
       }
     }
-
-    console.log("✔ Buffer time ended. Trying to start next TMC game...");
-  } catch (err) {
-    console.error("Error in TMC Cron:", err);
-  }
+  } catch (error) {}
 };
 
-// 🔹 Schedule the cron jobs
 const initCronJobs = (io) => {
-  // Check inactive users every 5 minutes
   cron.schedule("*/5 * * * *", () => {
     checkInactiveUsers(io);
   });
 
-  // Check game progress every minute
-  cron.schedule("* * * * *", () => {
-    checkARVGames(io);
-    checkTMCGames(io);
+  cron.schedule("*/10 * * * * *", () => {
+    manageGameLifecycle(io, ARVTarget, "ARV");
+    manageGameLifecycle(io, TMCTarget, "TMC");
   });
 };
 
