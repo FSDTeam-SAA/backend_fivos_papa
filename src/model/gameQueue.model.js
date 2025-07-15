@@ -14,6 +14,14 @@ const gameQueueSchema = new Schema(
         ref: "ARVTarget",
       },
     ],
+    isTMCQueueActive: {
+      type: Boolean,
+      default: false,
+    },
+    isARVQueueActive: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

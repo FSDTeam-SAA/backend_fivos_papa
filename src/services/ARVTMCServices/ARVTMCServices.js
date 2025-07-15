@@ -419,11 +419,9 @@ export const stopQueueService = async (res, next) => {
       });
     }
 
-    await GameQueue.findByIdAndUpdate(
-      "67da824e62d5a1b8cfece4c8",
-      { $set: { isTMCQueueActive: false, isARVQueueActive: false } },
-      { new: true }
-    );
+    queue.isARVQueueActive = false;
+    queue.isTMCQueueActive = false;
+    await queue.save();
 
     return res.status(200).json({
       status: true,
