@@ -396,3 +396,40 @@ export const updateMakeCompleteService = async (
     next(error);
   }
 };
+
+export const resetQueueService = async (res, next) => {
+  try {
+    await GameQueue.deleteOne({ _id: "67da824e62d5a1b8cfece4c8" });
+    return res.status(200).json({
+      status: true,
+      message: "Game queue reset successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const stopQueueService = async (res, next) => {
+  try {
+    const queue = await GameQueue.findById("67da824e62d5a1b8cfece4c8");
+    if (!queue) {
+      return res.status(404).json({
+        status: false,
+        message: "Game queue not found",
+      });
+    }
+
+    await GameQueue.findByIdAndUpdate(
+      "67da824e62d5a1b8cfece4c8",
+      { $set: { isTMCQueueActive: false, isARVQueueActive: false } },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Game queue stopped successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};

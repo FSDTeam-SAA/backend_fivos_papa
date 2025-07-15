@@ -1,7 +1,9 @@
 import { ARVTarget } from "../model/arvTarget.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import {
+  resetQueueService,
   startNextGameService,
+  stopQueueService,
   updateAddToQueueService,
   updateGameTimeService,
   updateMakeCompleteService,
@@ -343,6 +345,22 @@ export const getPendingOutcomeGames = async (req, res, next) => {
       data: pendingGames,
       message: "Games pending games for setting result image.",
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetQueue = async (req, res, next) => {
+  try {
+    await resetQueueService(res, next);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const stopQueue = async (req, res, next) => {
+  try {
+    await stopQueueService(res, next);
   } catch (error) {
     next(error);
   }
