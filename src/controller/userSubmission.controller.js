@@ -125,7 +125,42 @@ export const submitTMCGame = async (req, res, next) => {
       });
     }
 
-    let points = 0;
+    // Find the TMC target
+    const TMC = await TMCTarget.findById(TMCTargetId).select(
+      "status startTime revealTime targetImage"
+    );
+    if (!TMC) {
+      return res
+        .status(404)
+        .json({ status: false, message: "TMC target not found" });
+    }
+
+    const currentTime = new Date();
+
+    // Check if game is active and within gameDuration
+    if (TMC.status !== "active" || !TMC.startTime || !TMC.revealTime) {
+      return res.status(403).json({
+        status: false,
+        message: "Game is not active or has invalid timing",
+        details: {
+          status: TMC.status,
+          startTime: TMC.startTime,
+          revealTime: TMC.revealTime,
+          currentTime,
+        },
+      });
+    }
+
+    if (currentTime.getTime() >= TMC.revealTime.getTime()) {
+      return res.status(403).json({
+        status: false,
+        message: "Game submission period has ended",
+        details: {
+          lastSubmissionTime: TMC.revealTime,
+          currentTime,
+        },
+      });
+    }
 
     // Find or create user submission
     let userSubmission = await UserSubmission.findOne({ userId });
@@ -138,7 +173,6 @@ export const submitTMCGame = async (req, res, next) => {
         participatedARVTargets: [],
         lastChallengeDate: new Date(),
       });
-      await userSubmission.save();
     }
 
     // Prevent duplicate submission
@@ -153,29 +187,8 @@ export const submitTMCGame = async (req, res, next) => {
       });
     }
 
-    // Find the TMC target
-    const TMC = await TMCTarget.findById(TMCTargetId);
-
-    if (!TMC) {
-      return res
-        .status(404)
-        .json({ status: false, message: "TMC target not found" });
-    }
-
-    const currentTime = new Date();
-
-    if (TMC.startTime.getTime() < currentTime.getTime()) {
-      return res.status(403).json({
-        status: false,
-        message: "Game time has ended",
-        details: {
-          lastSubmissionTime: TMC.startTime,
-          currentTime: currentTime,
-        },
-      });
-    }
-
     // Calculate points based on choices
+    let points = 0;
     if (TMC.targetImage === firstChoiceImage) {
       points = 25;
     } else if (TMC.targetImage === secondChoiceImage) {
@@ -226,42 +239,10 @@ export const submitTMCGame = async (req, res, next) => {
 
 // Submit ARV game
 export const submitARVGame = async (req, res, next) => {
+  const { submittedImage, ARVTargetId } = req.body;
+  const userId = req.user._id;
+
   try {
-    const { submittedImage, ARVTargetId } = req.body;
-    const userId = req.user._id;
-
-    const ARV = await ARVTarget.findById(ARVTargetId);
-    if (!ARV) {
-      return res.status(404).json({ message: "ARV target not found" });
-    }
-
-    const currentTime = new Date();
-    if (ARV.gameTime.getTime() < currentTime.getTime()) {
-      return res.status(403).json({
-        message: "Game time has ended",
-        details: {
-          lastSubmissionTime: ARV.gameTime,
-          currentTime: currentTime,
-        },
-      });
-    }
-
-    let userSubmission =
-      (await UserSubmission.findOne({ userId })) ||
-      new UserSubmission({ userId, tierRank: "NOVICE SEEKER" });
-
-    // Prevent duplicate submission
-    const alreadySubmitted = userSubmission.participatedARVTargets.some(
-      (entry) => entry.ARVId.toString() === ARVTargetId
-    );
-
-    if (alreadySubmitted) {
-      return res.status(409).json({
-        status: false,
-        message: "You have already submitted for this ARV game",
-      });
-    }
-
     // Get current user to check targetsLeft
     const currentUser = await User.findById(userId);
     if (!currentUser) {
@@ -278,6 +259,69 @@ export const submitARVGame = async (req, res, next) => {
       });
     }
 
+    // Find the ARV target
+    const ARV = await ARVTarget.findById(ARVTargetId).select(
+      "status gameTime revealTime"
+    );
+    if (!ARV) {
+      return res
+        .status(404)
+        .json({ status: false, message: "ARV target not found" });
+    }
+
+    const currentTime = new Date();
+
+    // Check if game is active and within gameDuration
+    if (ARV.status !== "active" || !ARV.gameTime || !ARV.revealTime) {
+      return res.status(403).json({
+        status: false,
+        message: "Game is not active or has invalid timing",
+        details: {
+          status: ARV.status,
+          gameTime: ARV.gameTime,
+          revealTime: ARV.revealTime,
+          currentTime,
+        },
+      });
+    }
+
+    if (currentTime.getTime() >= ARV.revealTime.getTime()) {
+      return res.status(403).json({
+        status: false,
+        message: "Game submission period has ended",
+        details: {
+          lastSubmissionTime: ARV.revealTime,
+          currentTime,
+        },
+      });
+    }
+
+    // Find or create user submission
+    let userSubmission = await UserSubmission.findOne({ userId });
+    if (!userSubmission) {
+      userSubmission = new UserSubmission({
+        userId,
+        completedChallenges: 0,
+        totalPoints: 0,
+        participatedTMCTargets: [],
+        participatedARVTargets: [],
+        lastChallengeDate: new Date(),
+      });
+    }
+
+    // Prevent duplicate submission
+    const alreadySubmitted = userSubmission.participatedARVTargets.some(
+      (entry) => entry.ARVId.toString() === ARVTargetId
+    );
+
+    if (alreadySubmitted) {
+      return res.status(409).json({
+        status: false,
+        message: "You have already submitted for this ARV game",
+      });
+    }
+
+    // Update user submission
     userSubmission.participatedARVTargets.push({
       ARVId: ARVTargetId,
       submittedImage,
@@ -295,7 +339,7 @@ export const submitARVGame = async (req, res, next) => {
     await updatedUser.save();
 
     return res.status(200).json({
-      success: true,
+      status: true,
       message: "ARV game submitted successfully",
       data: {
         revealTime: ARV.revealTime,
@@ -303,7 +347,7 @@ export const submitARVGame = async (req, res, next) => {
         gameTime: ARV.gameTime,
         submissionStatus: {
           canSubmit: true,
-          until: ARV.gameTime,
+          until: ARV.revealTime,
         },
       },
       targetsLeft: updatedUser.targetsLeft,
