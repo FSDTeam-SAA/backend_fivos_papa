@@ -50,100 +50,13 @@ const manageGameLifecycle = async (io, model, gameName) => {
   const now = new Date();
 
   try {
-    // Check for stuck games in revealed or completed phase
-    const stuckGames = await model
-      .find({
-        $or: [
-          { status: "revealed", isCompleted: false },
-          { status: "completed", isCompleted: false }, // For ARV
-        ],
-      })
-      .lean();
-
-    if (stuckGames.length > 0) {
-      for (const game of stuckGames) {
-        const baseTime = gameName === "TMC" ? game.startTime : game.gameTime;
-        const revealEnd = baseTime
-          ? addMinutes(
-              new Date(baseTime),
-              game.gameDuration + game.revealDuration
-            )
-          : null;
-        const outcomeEnd =
-          gameName === "ARV" && revealEnd
-            ? addMinutes(revealEnd, game.outcomeDuration || 0)
-            : null;
-        const bufferEnd =
-          game.bufferTime ||
-          (gameName === "TMC"
-            ? addMinutes(revealEnd, game.bufferDuration)
-            : addMinutes(outcomeEnd, game.bufferDuration));
-
-        if (!bufferEnd || now.getTime() >= bufferEnd.getTime()) {
-          await model.findByIdAndUpdate(game._id, {
-            isCompleted: true,
-            isActive: false,
-            isPartiallyActive: false,
-            status: "expired",
-            bufferTime: bufferEnd || now,
-          });
-
-          await CompletedTargets.findOneAndUpdate(
-            { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
-            {
-              $push: {
-                [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: game._id,
-              },
-            },
-            { upsert: true }
-          );
-
-          await Notification.deleteMany({ targetCode: game.code });
-
-          await emitGlobalNotification(io, {
-            message: `${gameName} game ${game.code} has expired (forced).`,
-            targetCode: game.code,
-          });
-
-          const nextGame = await startNextGameFromCron(
-            model,
-            io,
-            console.error,
-            gameName
-          );
-          if (nextGame) {
-            await emitGlobalNotification(io, {
-              message: `New ${gameName} game ${nextGame.code} has started!`,
-              targetCode: nextGame.code,
-            });
-          }
-        }
-      }
-    }
-
-    // Check active games
+    // Check for active or partially active games
     const activeGames = await model
       .find({
         $or: [{ isActive: true }, { isPartiallyActive: true }],
         isCompleted: false,
       })
       .lean();
-
-    if (!activeGames.length && !stuckGames.length) {
-      const nextGame = await startNextGameFromCron(
-        model,
-        io,
-        console.error,
-        gameName
-      );
-      if (nextGame) {
-        await emitGlobalNotification(io, {
-          message: `New ${gameName} game ${nextGame.code} has started!`,
-          targetCode: nextGame.code,
-        });
-      }
-      return;
-    }
 
     for (const game of activeGames) {
       const {
@@ -206,7 +119,52 @@ const manageGameLifecycle = async (io, model, gameName) => {
         bufferDuration
       );
 
-      if (now.getTime() >= gameEnd.getTime() && status === "active") {
+      // Only update status or start next game after bufferEnd
+      if (now.getTime() >= bufferEnd.getTime()) {
+        if (
+          status === "active" ||
+          status === "revealed" ||
+          (gameName === "ARV" && status === "completed")
+        ) {
+          await model.findByIdAndUpdate(_id, {
+            isCompleted: true,
+            isActive: false,
+            isPartiallyActive: false,
+            status: "expired",
+            bufferTime: now,
+          });
+
+          await CompletedTargets.findOneAndUpdate(
+            { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
+            {
+              $push: {
+                [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: _id,
+              },
+            },
+            { upsert: true }
+          );
+
+          await Notification.deleteMany({ targetCode: code });
+
+          await emitGlobalNotification(io, {
+            message: `${gameName} game ${code} has expired.`,
+            targetCode: code,
+          });
+
+          const nextGame = await startNextGameFromCron(
+            model,
+            io,
+            console.error,
+            gameName
+          );
+          if (nextGame) {
+            await emitGlobalNotification(io, {
+              message: `New ${gameName} game ${nextGame.code} has started!`,
+              targetCode: nextGame.code,
+            });
+          }
+        }
+      } else if (status === "active" && now.getTime() >= gameEnd.getTime()) {
         await model.findByIdAndUpdate(_id, {
           isActive: false,
           isPartiallyActive: true,
@@ -219,8 +177,9 @@ const manageGameLifecycle = async (io, model, gameName) => {
         });
       } else if (
         gameName === "ARV" &&
+        status === "revealed" &&
         now.getTime() >= revealEnd.getTime() &&
-        status === "revealed"
+        now.getTime() < bufferEnd.getTime()
       ) {
         await model.findByIdAndUpdate(_id, {
           isActive: false,
@@ -232,41 +191,6 @@ const manageGameLifecycle = async (io, model, gameName) => {
           message: `${gameName} game ${code} has completed!`,
           targetCode: code,
         });
-      } else if (now.getTime() >= bufferEnd.getTime() && !game.isCompleted) {
-        await model.findByIdAndUpdate(_id, {
-          isCompleted: true,
-          isActive: false,
-          isPartiallyActive: false,
-          status: "expired",
-        });
-
-        await CompletedTargets.findOneAndUpdate(
-          { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
-          {
-            $push: { [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: _id },
-          },
-          { upsert: true }
-        );
-
-        await Notification.deleteMany({ targetCode: code });
-
-        await emitGlobalNotification(io, {
-          message: `${gameName} game ${code} has expired.`,
-          targetCode: code,
-        });
-
-        const nextGame = await startNextGameFromCron(
-          model,
-          io,
-          console.error,
-          gameName
-        );
-        if (nextGame) {
-          await emitGlobalNotification(io, {
-            message: `New ${gameName} game ${nextGame.code} has started!`,
-            targetCode: nextGame.code,
-          });
-        }
       } else if (
         (status === "revealed" && now.getTime() >= revealEnd.getTime()) ||
         (gameName === "ARV" &&
@@ -289,7 +213,83 @@ const manageGameLifecycle = async (io, model, gameName) => {
         }
       }
     }
-  } catch (error) {}
+
+    // Only start next game if no active games and buffer phase of previous game has ended
+    if (!activeGames.length) {
+      const stuckGames = await model
+        .find({
+          $or: [
+            { status: "revealed", isCompleted: false },
+            { status: "completed", isCompleted: false }, // For ARV
+          ],
+        })
+        .lean();
+
+      for (const game of stuckGames) {
+        const baseTime = gameName === "TMC" ? game.startTime : game.gameTime;
+        const revealEnd = baseTime
+          ? addMinutes(
+              new Date(baseTime),
+              game.gameDuration + game.revealDuration
+            )
+          : null;
+        const outcomeEnd =
+          gameName === "ARV" && revealEnd
+            ? addMinutes(revealEnd, game.outcomeDuration || 0)
+            : null;
+        const bufferEnd =
+          game.bufferTime ||
+          (gameName === "TMC"
+            ? addMinutes(revealEnd, game.bufferDuration)
+            : addMinutes(outcomeEnd, game.bufferDuration));
+
+        if (!bufferEnd || now.getTime() >= bufferEnd.getTime()) {
+          await model.findByIdAndUpdate(game._id, {
+            isCompleted: true,
+            isActive: false,
+            isPartiallyActive: false,
+            status: "expired",
+            bufferTime: bufferEnd || now,
+          });
+
+          await CompletedTargets.findOneAndUpdate(
+            { _id: process.env.COMPLETED_TARGETS_DOCUMENT_ID },
+            {
+              $push: {
+                [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: game._id,
+              },
+            },
+            { upsert: true }
+          );
+
+          await Notification.deleteMany({ targetCode: game.code });
+
+          await emitGlobalNotification(io, {
+            message: `${gameName} game ${game.code} has expired (forced).`,
+            targetCode: game.code,
+          });
+        }
+      }
+
+      // Start next game only if no active or stuck games
+      if (!stuckGames.length) {
+        const nextGame = await startNextGameFromCron(
+          model,
+          io,
+          console.error,
+          gameName
+        );
+        if (nextGame) {
+          await emitGlobalNotification(io, {
+            message: `New ${gameName} game ${nextGame.code} has started!`,
+            targetCode: nextGame.code,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error in manageGameLifecycle (${gameName}):`, error);
+  }
 };
 
 const initCronJobs = (io) => {
