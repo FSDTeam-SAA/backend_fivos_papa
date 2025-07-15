@@ -164,7 +164,7 @@ export const submitTMCGame = async (req, res, next) => {
 
     const currentTime = new Date();
 
-    if (TMC.gameTime.getTime() < currentTime.getTime()) {
+    if (TMC.startTime.getTime() < currentTime.getTime()) {
       return res.status(403).json({
         status: false,
         message: "Game time has ended",
