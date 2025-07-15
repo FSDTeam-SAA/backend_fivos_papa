@@ -79,7 +79,7 @@ export const getAllARVTargets = async (req, res, next) => {
       ARVTarget.countDocuments(),
       ARVTarget.find()
         .select(
-          "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+          "eventName eventDescription code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
         )
         .skip(skip)
         .limit(limit),
@@ -121,7 +121,7 @@ export const getAllQueuedARVTargets = async (req, res, next) => {
         isPartiallyActive: false,
       })
         .select(
-          "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+          "eventName eventDescription code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
         )
         .skip(skip)
         .limit(limit),
@@ -164,7 +164,7 @@ export const getAllUnQueuedARVTargets = async (req, res, next) => {
         isPartiallyActive: false,
       })
         .select(
-          "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+          "eventName eventDescription code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
         )
         .sort(sort) // Add sorting
         .skip(skip)
@@ -195,7 +195,7 @@ export const getActiveARVTarget = async (_, res, next) => {
       $or: [{ isActive: true }, { isPartiallyActive: true }],
     })
       .select(
-        "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isPartiallyActive status"
+        "eventName eventDescription code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isPartiallyActive status"
       )
       .lean();
 
@@ -337,7 +337,7 @@ export const getPendingOutcomeGames = async (req, res, next) => {
       resultImage: { $exists: false },
       isCompleted: false,
     }).select(
-      "code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
+      "eventName eventDescription code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isQueued isPartiallyActive status"
     );
 
     return res.status(200).json({
