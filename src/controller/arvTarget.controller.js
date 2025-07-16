@@ -195,7 +195,7 @@ export const getActiveARVTarget = async (_, res, next) => {
       $or: [{ isActive: true }, { isPartiallyActive: true }],
     })
       .select(
-        "eventName eventDescription code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isPartiallyActive status"
+        "resultImage eventName eventDescription code gameTime revealTime outcomeTime bufferTime revealDuration outcomeDuration bufferDuration isActive isPartiallyActive status"
       )
       .lean();
 
