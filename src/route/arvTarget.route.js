@@ -14,6 +14,7 @@ import {
   updateMakeInactive,
   updateMakeComplete,
   getPendingOutcomeGames,
+  getARVTargetWithNullResultImage,
 } from "../controller/arvTarget.controller.js";
 
 const router = express.Router();
@@ -33,5 +34,9 @@ router.patch("/update-startNextGame", startNextGame);
 router.patch("/update-ARVTarget-makeInactive/:id", updateMakeInactive);
 router.patch("/update-ARVTarget-makeComplete/:id", updateMakeComplete);
 router.get("/get-pendingOutcomeGames", getPendingOutcomeGames);
+router.get(
+  "/get-ARVTargetWithNullResultImage",
+  getARVTargetWithNullResultImage
+);
 
 export default router;

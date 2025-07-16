@@ -365,3 +365,13 @@ export const stopQueue = async (req, res, next) => {
     next(error);
   }
 };
+
+// Get arv target when the resultImage is null or ""
+export const getARVTargetWithNullResultImage = async (req, res, next) => {
+  try {
+    const arvTarget = await ARVTarget.findOne({ resultImage: "" });
+    return res.status(200).json({ status: true, data: arvTarget });
+  } catch (error) {
+    next(error);
+  }
+};
