@@ -76,12 +76,16 @@ const ARVTargetSchema = new Schema(
       ],
       default: "inactive",
     },
+    isResultRevealed: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
 
 ARVTargetSchema.post("findOneAndUpdate", async function (doc) {
-  if (doc && doc.isCompleted) {
+  if (doc && doc.isResultRevealed) {
     await Notification.deleteMany({ targetCode: doc.code });
   }
 });

@@ -77,9 +77,7 @@ export const getAllARVTargets = async (req, res, next) => {
   try {
     const [totalItems, ARVTargets] = await Promise.all([
       ARVTarget.countDocuments(),
-      ARVTarget.find()
-        .skip(skip)
-        .limit(limit),
+      ARVTarget.find().skip(skip).limit(limit),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -184,8 +182,7 @@ export const getActiveARVTarget = async (_, res, next) => {
   try {
     const activeARVTarget = await ARVTarget.findOne({
       $or: [{ isActive: true }, { isPartiallyActive: true }],
-    })
-      .lean();
+    }).lean();
 
     return res.status(200).json({
       status: true,
@@ -225,6 +222,7 @@ export const updateResultImage = async (req, res, next) => {
 
     await ARVTarget.findByIdAndUpdate(id, {
       resultImage,
+      isResultRevealed: true,
     });
 
     await Notification.create({
@@ -324,7 +322,7 @@ export const getPendingOutcomeGames = async (req, res, next) => {
       outcomeTime: { $lte: now },
       resultImage: { $exists: false },
       isCompleted: false,
-    })
+    });
 
     return res.status(200).json({
       status: true,
