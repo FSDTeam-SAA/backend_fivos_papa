@@ -70,3 +70,18 @@ export const getNotifications = async (req, res, next) => {
     next(error);
   }
 };
+
+// Delete a notification by ID
+export const deleteNotification = async (req, res, next) => {
+  const { notificationId } = req.params;
+
+  try {
+    await Notification.findByIdAndDelete(notificationId);
+    return res.status(200).json({
+      status: true,
+      message: "Notification deleted successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};

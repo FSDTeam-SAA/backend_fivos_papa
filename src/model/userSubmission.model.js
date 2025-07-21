@@ -62,6 +62,10 @@ const UserSubmissionSchema = new Schema(
       type: String,
       default: "NOVICE SEEKER",
     },
+    isResultRevealed: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

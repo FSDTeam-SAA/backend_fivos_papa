@@ -89,7 +89,7 @@ const ARVTargetSchema = new Schema(
 );
 
 ARVTargetSchema.post("findOneAndUpdate", async function (doc) {
-  if (doc && doc.isResultRevealed) {
+  if (doc && doc.isCompleted) {
     await Notification.deleteMany({ targetCode: doc.code });
   }
 });

@@ -127,6 +127,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
       );
 
       // Reveal Logic
+      // Reveal Logic for TMC
       if (status === "active" && now.getTime() >= gameEnd.getTime()) {
         await model.findByIdAndUpdate(_id, {
           isActive: false,
@@ -140,12 +141,10 @@ const manageGameLifecycle = async (io, model, gameName) => {
             "participatedTMCTargets.TMCId": _id,
           });
 
-          if (submissions.length === 0) {
-            await emitGlobalNotification(io, {
-              message: `TMC game ${code} has been revealed!`,
-              targetCode: code,
-            });
-          } else {
+          let messageSent = false;
+
+          if (submissions.length > 0) {
+            // Send individual notifications to users who participated
             for (const submission of submissions) {
               const entry = submission.participatedTMCTargets.find(
                 (e) => e.TMCId.toString() === _id.toString()
@@ -158,20 +157,16 @@ const manageGameLifecycle = async (io, model, gameName) => {
                 });
               }
             }
+            messageSent = true;
+          }
 
-            await emitGlobalNotification(io, {
-              message: `TMC game ${code} has been revealed!`,
-              targetCode: code,
-            });
-          }
-        } else {
-          // ARV Reveal
-          if (!revealNotified) {
-            await emitGlobalNotification(io, {
-              message: `${gameName} game ${code} has been revealed!`,
-              targetCode: code,
-            });
-          }
+          // Send global notification (only one of the two messages)
+          await emitGlobalNotification(io, {
+            message: messageSent
+              ? `TMC game ${code} has been revealed!`
+              : `TMC game ${code} has been revealed!`,
+            targetCode: code,
+          });
         }
       }
 
