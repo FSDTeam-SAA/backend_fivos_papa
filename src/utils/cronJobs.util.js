@@ -200,12 +200,13 @@ const manageGameLifecycle = async (io, model, gameName) => {
         gameName === "ARV" &&
         status === "revealed" &&
         now.getTime() >= revealEnd.getTime() &&
-        now.getTime() < bufferEnd.getTime()
+        !game.completedNotified
       ) {
         await model.findByIdAndUpdate(_id, {
           isActive: false,
           isPartiallyActive: true,
           status: "completed",
+          completedNotified: true,
         });
 
         await emitGlobalNotification(io, {
