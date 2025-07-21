@@ -6,6 +6,7 @@ import { CompletedTargets } from "../model/completedTargets.model.js";
 import { Notification } from "../model/notification.model.js";
 import { emitGlobalNotification } from "../jobs/notificationJob.js";
 import { startNextGameFromCron } from "../services/ARVTMCServices/ARVTMCServices.js";
+import { UserSubmission } from "../model/userSubmission.model.js";
 
 const addMinutes = (start, minutes) => {
   if (!start || isNaN(start.getTime())) {
@@ -171,10 +172,30 @@ const manageGameLifecycle = async (io, model, gameName) => {
           status: "revealed",
         });
 
-        await emitGlobalNotification(io, {
-          message: `${gameName} game ${code} has been revealed!`,
-          targetCode: code,
-        });
+        if (gameName === "TMC") {
+          const submissions = await UserSubmission.find({
+            "participatedTMCTargets.TMCId": _id,
+          });
+
+          for (const submission of submissions) {
+            const target = submission.participatedTMCTargets.find(
+              (entry) => entry.TMCId.toString() === _id.toString()
+            );
+
+            if (target) {
+              await emitGlobalNotification(io, {
+                message: `TMC game ${code} has been revealed! You earned ${target.points} points.`,
+                targetCode: code,
+                userId: submission.userId._id,
+              });
+            }
+          }
+        } else {
+          await emitGlobalNotification(io, {
+            message: `${gameName} game ${code} has been revealed!`,
+            targetCode: code,
+          });
+        }
       } else if (
         gameName === "ARV" &&
         status === "revealed" &&
@@ -192,11 +213,14 @@ const manageGameLifecycle = async (io, model, gameName) => {
           targetCode: code,
         });
       } else if (
-        (status === "revealed" && now.getTime() >= revealEnd.getTime()) ||
-        (gameName === "ARV" &&
-          status === "completed" &&
-          now.getTime() < bufferEnd.getTime())
+        ((status === "revealed" && now.getTime() >= revealEnd.getTime()) ||
+          (gameName === "ARV" &&
+            status === "completed" &&
+            now.getTime() < bufferEnd.getTime())) &&
+        !game.bufferNotified
       ) {
+        await model.findByIdAndUpdate(game._id, { bufferNotified: true });
+
         await emitGlobalNotification(io, {
           message: `${gameName} game ${code} is in ${
             status === "revealed" ? "buffer" : "completed"

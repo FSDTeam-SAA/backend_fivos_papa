@@ -80,6 +80,10 @@ const ARVTargetSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    bufferNotified: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
