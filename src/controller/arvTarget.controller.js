@@ -13,6 +13,7 @@ import {
 import { generateCode } from "../utils/generateCode.js";
 import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
 import { Notification } from "../model/notification.model.js";
+import { UserSubmission } from "../model/userSubmission.model.js";
 
 export const createARVTarget = async (req, res, next) => {
   const {
@@ -225,14 +226,43 @@ export const updateResultImage = async (req, res, next) => {
       isResultRevealed: true,
     });
 
-    await Notification.create({
-      message: `Result image set for game ${game.code}.`,
-      targetCode: game.code,
+    const io = req.app.get("io");
+
+    // Find all users who submitted this ARV target
+    const submissions = await UserSubmission.find({
+      "participatedARVTargets.ARVId": id,
+    }).populate("userId");
+
+    for (const submission of submissions) {
+      const target = submission.participatedARVTargets.find(
+        (entry) => entry.ARVId.toString() === id.toString()
+      );
+
+      const userId = submission.userId._id;
+      const points = target?.points || 0;
+
+      // Emit to user
+      io.to(`user_${userId}`).emit("notification", {
+        message: `Result image revealed for game ${game.code}. You earned ${points} points.`,
+        targetCode: game.code,
+      });
+
+      // Save to DB
+      await Notification.create({
+        userId,
+        message: `Result image revealed for game ${game.code}. You earned ${points} points.`,
+        targetCode: game.code,
+      });
+    }
+
+    // Emit to game room
+    io.to(`game_${game.code}`).emit("resultImageUpdated", {
+      resultImage,
     });
 
     return res.status(200).json({
       status: true,
-      message: "Result image updated.",
+      message: "Result image updated and users notified.",
     });
   } catch (error) {
     next(error);
