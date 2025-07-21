@@ -4,7 +4,10 @@ import { ARVTarget } from "../model/arvTarget.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import { CompletedTargets } from "../model/completedTargets.model.js";
 import { Notification } from "../model/notification.model.js";
-import { emitGlobalNotification } from "../jobs/notificationJob.js";
+import {
+  emitGlobalNotification,
+  emitNotification,
+} from "../jobs/notificationJob.js";
 import { startNextGameFromCron } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
 
@@ -123,7 +126,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         bufferDuration
       );
 
-      // ✅ Reveal Logic
+      // Reveal Logic
       if (status === "active" && now.getTime() >= gameEnd.getTime()) {
         await model.findByIdAndUpdate(_id, {
           isActive: false,
@@ -172,7 +175,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         }
       }
 
-      // ✅ ARV Outcome
+      // ARV Outcome
       if (
         gameName === "ARV" &&
         status === "revealed" &&
@@ -192,7 +195,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         });
       }
 
-      // ✅ Buffer Notification (Both TMC & ARV)
+      // Buffer Notification (Both TMC & ARV)
       if (
         ((gameName === "ARV" &&
           status === "completed" &&
@@ -210,7 +213,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         });
       }
 
-      // ✅ Expire after Buffer
+      // Expire after Buffer
       if (now.getTime() >= bufferEnd.getTime()) {
         if (
           status === "active" ||
