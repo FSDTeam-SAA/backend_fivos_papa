@@ -11,7 +11,16 @@ cron.schedule("* * * * *", async () => {
 
   const outcomeTargets = await ARVTarget.find({
     outcomeTime: { $lte: roundedNow, $gt: new Date(roundedNow - 60000) },
+    completedNotified: false,
   });
+
+  await ARVTarget.updateMany(
+    {
+      outcomeTime: { $lte: roundedNow, $gt: new Date(roundedNow - 60000) },
+      completedNotified: false,
+    },
+    { $set: { completedNotified: true } }
+  );
 
   for (const target of outcomeTargets) {
     await Notification.create({

@@ -21,10 +21,9 @@ const TMCTargetSchema = new Schema(
     isPartiallyActive: { type: Boolean, default: false },
     isQueued: { type: Boolean, default: false },
     isCompleted: { type: Boolean, default: false },
-    bufferNotified: {
-      type: Boolean,
-      default: false,
-    },
+    revealNotified: { type: Boolean, default: false },
+    bufferNotified: { type: Boolean, default: false },
+    startNotified: { type: Boolean, default: false },
     status: {
       type: String,
       enum: [

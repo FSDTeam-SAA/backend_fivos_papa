@@ -51,7 +51,6 @@ const manageGameLifecycle = async (io, model, gameName) => {
   const now = new Date();
 
   try {
-    // Check for active or partially active games
     const activeGames = await model
       .find({
         $or: [{ isActive: true }, { isPartiallyActive: true }],
@@ -70,9 +69,13 @@ const manageGameLifecycle = async (io, model, gameName) => {
         outcomeDuration,
         bufferDuration,
         status,
+        startNotified,
+        revealNotified,
+        outcomeNotified,
+        bufferNotified,
       } = game;
-      const baseTime = gameName === "TMC" ? startTime : gameTime;
 
+      const baseTime = gameName === "TMC" ? startTime : gameTime;
       if (!baseTime || isNaN(baseTime.getTime())) {
         await model.findByIdAndUpdate(_id, {
           isCompleted: true,
@@ -120,7 +123,94 @@ const manageGameLifecycle = async (io, model, gameName) => {
         bufferDuration
       );
 
-      // Only update status or start next game after bufferEnd
+      // ✅ Reveal Logic
+      if (status === "active" && now.getTime() >= gameEnd.getTime()) {
+        await model.findByIdAndUpdate(_id, {
+          isActive: false,
+          isPartiallyActive: true,
+          status: "revealed",
+          revealNotified: true,
+        });
+
+        if (gameName === "TMC") {
+          const submissions = await UserSubmission.find({
+            "participatedTMCTargets.TMCId": _id,
+          });
+
+          if (submissions.length === 0) {
+            await emitGlobalNotification(io, {
+              message: `TMC game ${code} has been revealed!`,
+              targetCode: code,
+            });
+          } else {
+            for (const submission of submissions) {
+              const entry = submission.participatedTMCTargets.find(
+                (e) => e.TMCId.toString() === _id.toString()
+              );
+              if (entry) {
+                await emitNotification(io, {
+                  userId: submission.userId,
+                  targetCode: code,
+                  message: `Your TMC game ${code} has been revealed! You earned ${entry.points} points.`,
+                });
+              }
+            }
+
+            await emitGlobalNotification(io, {
+              message: `TMC game ${code} has been revealed!`,
+              targetCode: code,
+            });
+          }
+        } else {
+          // ARV Reveal
+          if (!revealNotified) {
+            await emitGlobalNotification(io, {
+              message: `${gameName} game ${code} has been revealed!`,
+              targetCode: code,
+            });
+          }
+        }
+      }
+
+      // ✅ ARV Outcome
+      if (
+        gameName === "ARV" &&
+        status === "revealed" &&
+        now.getTime() >= revealEnd.getTime() &&
+        !outcomeNotified
+      ) {
+        await model.findByIdAndUpdate(_id, {
+          isActive: false,
+          isPartiallyActive: true,
+          status: "completed",
+          outcomeNotified: true,
+        });
+
+        await emitGlobalNotification(io, {
+          message: `${gameName} game ${code} has reached outcome time!`,
+          targetCode: code,
+        });
+      }
+
+      // ✅ Buffer Notification (Both TMC & ARV)
+      if (
+        ((gameName === "ARV" &&
+          status === "completed" &&
+          now.getTime() >= outcomeEnd.getTime()) ||
+          (gameName === "TMC" &&
+            status === "revealed" &&
+            now.getTime() >= revealEnd.getTime())) &&
+        !bufferNotified
+      ) {
+        await model.findByIdAndUpdate(game._id, { bufferNotified: true });
+
+        await emitGlobalNotification(io, {
+          message: `${gameName} game ${code} is in buffer stage.`,
+          targetCode: code,
+        });
+      }
+
+      // ✅ Expire after Buffer
       if (now.getTime() >= bufferEnd.getTime()) {
         if (
           status === "active" ||
@@ -165,80 +255,10 @@ const manageGameLifecycle = async (io, model, gameName) => {
             });
           }
         }
-      } else if (status === "active" && now.getTime() >= gameEnd.getTime()) {
-        await model.findByIdAndUpdate(_id, {
-          isActive: false,
-          isPartiallyActive: true,
-          status: "revealed",
-        });
-
-        if (gameName === "TMC") {
-          const submissions = await UserSubmission.find({
-            "participatedTMCTargets.TMCId": _id,
-          });
-
-          for (const submission of submissions) {
-            const target = submission.participatedTMCTargets.find(
-              (entry) => entry.TMCId.toString() === _id.toString()
-            );
-
-            if (target) {
-              await emitGlobalNotification(io, {
-                message: `TMC game ${code} has been revealed! You earned ${target.points} points.`,
-                targetCode: code,
-                userId: submission.userId._id,
-              });
-            }
-          }
-        } else {
-          await emitGlobalNotification(io, {
-            message: `${gameName} game ${code} has been revealed!`,
-            targetCode: code,
-          });
-        }
-      } else if (
-        gameName === "ARV" &&
-        status === "revealed" &&
-        now.getTime() >= revealEnd.getTime() &&
-        now.getTime() < bufferEnd.getTime()
-      ) {
-        await model.findByIdAndUpdate(_id, {
-          isActive: false,
-          isPartiallyActive: true,
-          status: "completed",
-        });
-
-        await emitGlobalNotification(io, {
-          message: `${gameName} game ${code} has completed!`,
-          targetCode: code,
-        });
-      } else if (
-        ((status === "revealed" && now.getTime() >= revealEnd.getTime()) ||
-          (gameName === "ARV" &&
-            status === "completed" &&
-            now.getTime() < bufferEnd.getTime())) &&
-        !game.bufferNotified
-      ) {
-        await model.findByIdAndUpdate(game._id, { bufferNotified: true });
-
-        await emitGlobalNotification(io, {
-          message: `${gameName} game ${code} is in ${
-            status === "revealed" ? "buffer" : "completed"
-          } stage.`,
-          targetCode: code,
-        });
-      } else if (status === "active") {
-        const timeLeft = Math.ceil((gameEnd.getTime() - now.getTime()) / 60000);
-        if (timeLeft > 0 && timeLeft % 5 === 0) {
-          await emitGlobalNotification(io, {
-            message: `${gameName} game ${code} is active! ${timeLeft} minutes remaining!`,
-            targetCode: code,
-          });
-        }
       }
     }
 
-    // Only start next game if no active games and buffer phase of previous game has ended
+    // 🔁 Force Expire Old Stuck Games
     if (!activeGames.length) {
       const stuckGames = await model
         .find({
@@ -295,7 +315,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         }
       }
 
-      // Start next game only if no active or stuck games
+      // Start new game if none are active/stuck
       if (!stuckGames.length) {
         const nextGame = await startNextGameFromCron(
           model,
