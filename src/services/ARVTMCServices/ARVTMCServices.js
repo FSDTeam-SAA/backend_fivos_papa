@@ -1,3 +1,4 @@
+import { emitGlobalNotification } from "../../jobs/notificationJob.js";
 import { CompletedTargets } from "../../model/completedTargets.model.js";
 import { GameQueue } from "../../model/gameQueue.model.js";
 import { Notification } from "../../model/notification.model.js";
@@ -46,11 +47,22 @@ export const updateAddToQueueService = async (
     );
 
     const queueField = gameName === "TMC" ? "TMCTargets" : "ARVTargets";
-    await GameQueue.findOneAndUpdate(
-      { _id: "67da824e62d5a1b8cfece4c8" },
-      { $push: { [queueField]: id } },
-      { upsert: true }
-    );
+    if (gameName === "TMC") {
+      await GameQueue.findOneAndUpdate(
+        { _id: "67da824e62d5a1b8cfece4c8" },
+        { $push: { [queueField]: id } },
+        { upsert: true }
+      );
+    } else if (gameName === "ARV") {
+      await GameQueue.findOneAndUpdate(
+        { _id: "67da824e62d5a1b8cfece4c8" },
+        {
+          $push: { [queueField]: id },
+          $set: { isARVQueueActive: true },
+        },
+        { upsert: true }
+      );
+    }
 
     return res
       .status(200)
@@ -62,6 +74,14 @@ export const updateAddToQueueService = async (
 
 export const startNextGameService = async (model, res, next, gameName) => {
   try {
+    if (gameName === "ARV") {
+      return res.status(403).json({
+        status: false,
+        message: "ARV games start automatically based on scheduled gameTime",
+      });
+    }
+
+    // TMC logic remains unchanged
     const activeGame = await model.findOne({
       $or: [{ isActive: true }, { isPartiallyActive: true }],
     });
@@ -71,9 +91,8 @@ export const startNextGameService = async (model, res, next, gameName) => {
         .json({ status: false, message: "Currently a game is running" });
     }
 
-    const queueField = gameName === "TMC" ? "TMCTargets" : "ARVTargets";
-    const queueActiveField =
-      gameName === "TMC" ? "isTMCQueueActive" : "isARVQueueActive";
+    const queueField = "TMCTargets";
+    const queueActiveField = "isTMCQueueActive";
     const queue = await GameQueue.findById("67da824e62d5a1b8cfece4c8");
     if (!queue || !queue[queueField].length) {
       return res
@@ -98,27 +117,15 @@ export const startNextGameService = async (model, res, next, gameName) => {
       isPartiallyActive: true,
       status: "active",
       isQueued: false,
+      startNotified: true,
     };
 
-    if (gameName === "TMC") {
-      updateFields.startTime = now;
-      updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
-      updateFields.bufferTime = addMinutes(
-        updateFields.revealTime,
-        nextGame.revealDuration
-      );
-    } else if (gameName === "ARV") {
-      updateFields.gameTime = now;
-      updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
-      updateFields.outcomeTime = addMinutes(
-        updateFields.revealTime,
-        nextGame.revealDuration
-      );
-      updateFields.bufferTime = addMinutes(
-        updateFields.outcomeTime,
-        nextGame.outcomeDuration
-      );
-    }
+    updateFields.startTime = now;
+    updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
+    updateFields.bufferTime = addMinutes(
+      updateFields.revealTime,
+      nextGame.revealDuration
+    );
 
     const startedGame = await model
       .findByIdAndUpdate(nextGameId, updateFields, { new: true })
@@ -131,7 +138,7 @@ export const startNextGameService = async (model, res, next, gameName) => {
     });
 
     await Notification.create({
-      message: `New ${gameName} game has started`,
+      message: `New TMC game has started`,
       targetCode: startedGame.code,
     });
 
@@ -180,6 +187,7 @@ export const startNextGameFromCron = async (model, io, log, gameName) => {
       isPartiallyActive: true,
       status: "active",
       isQueued: false,
+      startNotified: true,
     };
 
     if (gameName === "TMC") {
@@ -190,16 +198,18 @@ export const startNextGameFromCron = async (model, io, log, gameName) => {
         nextGame.revealDuration
       );
     } else if (gameName === "ARV") {
-      updateFields.gameTime = now;
-      updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
-      updateFields.outcomeTime = addMinutes(
-        updateFields.revealTime,
-        nextGame.revealDuration
-      );
-      updateFields.bufferTime = addMinutes(
-        updateFields.outcomeTime,
-        nextGame.outcomeDuration
-      );
+      if (!nextGame.gameTime || !nextGame.revealTime || !nextGame.outcomeTime) {
+        await GameQueue.findByIdAndUpdate("67da824e62d5a1b8cfece4c8", {
+          $pull: { [queueField]: nextGameId },
+        });
+        return null;
+      }
+      if (new Date(nextGame.gameTime) > now) {
+        return null; // Game is scheduled for the future
+      }
+      updateFields.gameTime = nextGame.gameTime;
+      updateFields.revealTime = nextGame.revealTime;
+      updateFields.outcomeTime = nextGame.outcomeTime;
     }
 
     const startedGame = await model
@@ -210,18 +220,9 @@ export const startNextGameFromCron = async (model, io, log, gameName) => {
       $pull: { [queueField]: nextGameId },
     });
 
-    await Notification.create({
-      message: `New ${gameName} game has started`,
-      targetCode: startedGame.code,
-    });
-
-    await emitGlobalNotification(io, {
-      message: `New ${gameName} game ${startedGame.code} has started!`,
-      targetCode: startedGame.code,
-    });
-
     return startedGame;
   } catch (error) {
+    log(`Error in startNextGameFromCron (${gameName}):`, error);
     return null;
   }
 };
