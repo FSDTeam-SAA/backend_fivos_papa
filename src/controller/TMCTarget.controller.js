@@ -2,9 +2,7 @@ import { ARVTarget } from "../model/arvTarget.model.js";
 import { CategoryImage } from "../model/categoryImage.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import {
-  resetQueueService,
   startNextGameService,
-  stopQueueService,
   updateAddToQueueService,
   updateGameTimeService,
   updateMakeCompleteService,

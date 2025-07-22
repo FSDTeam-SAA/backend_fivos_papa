@@ -103,7 +103,10 @@ const manageGameLifecycle = async (io, model, gameName) => {
 
         await Notification.deleteMany({ targetCode: code });
         await emitGlobalNotification(io, {
-          message: `${gameName} game ${code} has expired (forced due to invalid timestamps).`,
+          message:
+            gameName === "ARV"
+              ? `The ARV game ${code} is now expired! wait for the result.`
+              : `${gameName} game ${code} has expired (forced).`,
           targetCode: code,
         });
 
@@ -283,7 +286,10 @@ const manageGameLifecycle = async (io, model, gameName) => {
         await Notification.deleteMany({ targetCode: code });
 
         await emitGlobalNotification(io, {
-          message: `${gameName} game ${code} has expired.`,
+          message:
+            gameName === "ARV"
+              ? `The ARV game ${code} is now expired! wait for the result.`
+              : `${gameName} game ${code} has expired.`,
           targetCode: code,
         });
 
@@ -386,7 +392,10 @@ const manageGameLifecycle = async (io, model, gameName) => {
           await Notification.deleteMany({ targetCode: game.code });
 
           await emitGlobalNotification(io, {
-            message: `${gameName} game ${game.code} has expired (forced).`,
+            message:
+              gameName === "ARV"
+                ? `The ARV game ${game.code} is now expired! wait for the result.`
+                : `${gameName} game ${game.code} has expired (forced).`,
             targetCode: game.code,
           });
         }

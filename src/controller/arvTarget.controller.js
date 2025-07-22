@@ -1,7 +1,6 @@
 import { ARVTarget } from "../model/arvTarget.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import {
-  resetQueueService,
   startNextGameService,
   stopQueueService,
   updateAddToQueueService,
@@ -239,13 +238,6 @@ export const updateResultImage = async (req, res, next) => {
       return res.status(404).json({ status: false, message: "Game not found" });
     }
 
-    if (new Date() < new Date(game.revealTime)) {
-      return res.status(400).json({
-        status: false,
-        message: "Cannot set result image before reveal time",
-      });
-    }
-
     await ARVTarget.findByIdAndUpdate(id, {
       resultImage,
       isResultRevealed: true,
@@ -384,14 +376,6 @@ export const getPendingOutcomeGames = async (req, res, next) => {
       data: pendingGames,
       message: "Games pending games for setting result image.",
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const resetQueue = async (req, res, next) => {
-  try {
-    await resetQueueService(res, next);
   } catch (error) {
     next(error);
   }
