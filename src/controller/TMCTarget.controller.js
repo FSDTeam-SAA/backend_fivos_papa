@@ -89,7 +89,7 @@ export const getAllTMCTargets = async (req, res, next) => {
   try {
     const [totalItems, TMCTargets] = await Promise.all([
       TMCTarget.countDocuments(),
-      TMCTarget.find().skip(skip).limit(limit),
+      TMCTarget.find().skip(skip).limit(limit).sort({ createdAt: -1 }),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -128,7 +128,8 @@ export const getAllQueuedTMCTargets = async (req, res, next) => {
         isPartiallyActive: false,
       })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .sort({ createdAt: -1 }),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -153,13 +154,12 @@ export const getAllUnQueuedTMCTargets = async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
-  const sort = req.query.sort || "-createdAt"; // Default sort by newest
 
   try {
     const [totalItems, TMCTargets] = await Promise.all([
       TMCTarget.countDocuments({ isQueued: false, isActive: false }),
       TMCTarget.find({ isQueued: false, isActive: false })
-        .sort(sort) // Add sorting
+        .sort({ createdAt: -1 }) // Add sorting
         .skip(skip)
         .limit(limit),
     ]);
@@ -186,7 +186,9 @@ export const getActiveTMCTarget = async (_, res, next) => {
   try {
     const activeTMCTarget = await TMCTarget.findOne({
       $or: [{ isActive: true }, { isPartiallyActive: true }],
-    }).lean();
+    })
+      .sort({ createdAt: -1 })
+      .lean();
 
     return res.status(200).json({
       status: true,
