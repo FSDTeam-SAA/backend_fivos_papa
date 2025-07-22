@@ -18,7 +18,7 @@ import {
   deleteContactUs,
   replyContactUs,
 } from "../controller/admin.controller.js";
-import { stopQueue, resetQueue } from "../controller/arvTarget.controller.js";
+import { stopQueue } from "../controller/arvTarget.controller.js";
 import { getCompletedTargets } from "../controller/userSubmission.controller.js";
 import {
   getAllCompletedTargets,
@@ -97,6 +97,4 @@ router.post("/contact-us/reply/:id", verifyJWT, isAdmin, replyContactUs);
 router.delete("/contact-us/:id", verifyJWT, isAdmin, deleteContactUs);
 
 router.patch("/stop-queue", stopQueue);
-router.patch("/reset-queue", resetQueue);
-
 export default router;

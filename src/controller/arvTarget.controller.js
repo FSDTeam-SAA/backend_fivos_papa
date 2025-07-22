@@ -1,7 +1,6 @@
 import { ARVTarget } from "../model/arvTarget.model.js";
 import { TMCTarget } from "../model/tmcTarget.model.js";
 import {
-  resetQueueService,
   startNextGameService,
   stopQueueService,
   updateAddToQueueService,
@@ -14,6 +13,7 @@ import { generateCode } from "../utils/generateCode.js";
 import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
 import { Notification } from "../model/notification.model.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
+import { GameQueue } from "../model/gameQueue.model.js";
 
 export const createARVTarget = async (req, res, next) => {
   const {
@@ -33,14 +33,7 @@ export const createARVTarget = async (req, res, next) => {
     const now = new Date();
     const gameTimeDate = new Date(gameTime);
     const revealTimeDate = new Date(revealTime);
-    const outcomeTimeDate = new Date(
-      new Date(outcomeTime).getTime() + 5 * 60 * 1000
-    );
-
-    console.log(outcomeTimeDate);
-    // const outcomeTimeDate = new Date(
-    //   new Date(outcomeTime).getTime() + 2 * 60 * 60 * 1000
-    // );
+    const outcomeTimeDate = new Date(outcomeTime);
 
     if (gameTimeDate <= now) {
       return res.status(400).json({
@@ -76,9 +69,19 @@ export const createARVTarget = async (req, res, next) => {
       image3,
       controlImage,
       status: "inactive",
+      isQueued: true,
     });
 
     await newARVTarget.save();
+
+    await GameQueue.findOneAndUpdate(
+      { _id: "67da824e62d5a1b8cfece4c8" },
+      {
+        $push: { ARVTargets: newARVTarget._id },
+        $set: { isARVQueueActive: true },
+      },
+      { upsert: true }
+    );
 
     await markImageAsUsed(image1);
     await markImageAsUsed(image2);
@@ -103,7 +106,7 @@ export const getAllARVTargets = async (req, res, next) => {
   try {
     const [totalItems, ARVTargets] = await Promise.all([
       ARVTarget.countDocuments(),
-      ARVTarget.find().skip(skip).limit(limit),
+      ARVTarget.find().skip(skip).limit(limit).sort({ createdAt: -1 }),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -142,7 +145,8 @@ export const getAllQueuedARVTargets = async (req, res, next) => {
         isPartiallyActive: false,
       })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .sort({ createdAt: -1 }),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -167,7 +171,6 @@ export const getAllUnQueuedARVTargets = async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
-  const sort = req.query.sort || "-createdAt"; // Default sort by newest
 
   try {
     const [totalItems, ARVTargets] = await Promise.all([
@@ -181,7 +184,7 @@ export const getAllUnQueuedARVTargets = async (req, res, next) => {
         isActive: false,
         isPartiallyActive: false,
       })
-        .sort(sort) // Add sorting
+        .sort({ createdAt: -1 }) // Add sorting
         .skip(skip)
         .limit(limit),
     ]);
@@ -208,7 +211,9 @@ export const getActiveARVTarget = async (_, res, next) => {
   try {
     const activeARVTarget = await ARVTarget.findOne({
       $or: [{ isActive: true }, { isPartiallyActive: true }],
-    }).lean();
+    })
+      .sort({ createdAt: -1 })
+      .lean();
 
     return res.status(200).json({
       status: true,
@@ -239,11 +244,10 @@ export const updateResultImage = async (req, res, next) => {
       return res.status(404).json({ status: false, message: "Game not found" });
     }
 
-    if (new Date() < new Date(game.revealTime)) {
-      return res.status(400).json({
-        status: false,
-        message: "Cannot set result image before reveal time",
-      });
+    if (game.isResultRevealed) {
+      return res
+        .status(403)
+        .json({ status: false, message: "Result image already revealed" });
     }
 
     await ARVTarget.findByIdAndUpdate(id, {
@@ -377,21 +381,13 @@ export const getPendingOutcomeGames = async (req, res, next) => {
       outcomeTime: { $lte: now },
       resultImage: { $exists: false },
       isCompleted: false,
-    });
+    }).sort({ createdAt: -1 });
 
     return res.status(200).json({
       status: true,
       data: pendingGames,
       message: "Games pending games for setting result image.",
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const resetQueue = async (req, res, next) => {
-  try {
-    await resetQueueService(res, next);
   } catch (error) {
     next(error);
   }
