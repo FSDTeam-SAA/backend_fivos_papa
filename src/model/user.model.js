@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 const userSchema = new Schema(
@@ -151,7 +151,7 @@ const userSchema = new Schema(
 );
 
 // Normalize gender to lowercase before validation
-userSchema.pre('validate', function (next) {
+userSchema.pre("validate", function (next) {
   if (this.gender) {
     this.gender = this.gender.toLowerCase();
   }
@@ -159,19 +159,19 @@ userSchema.pre('validate', function (next) {
 });
 
 // Middleware to calculate nextTierPoint based on points
-userSchema.pre('save', function (next) {
+userSchema.pre("save", function (next) {
   const points = this.totalPoints;
   const tierTable = [
-    { name: 'NOVICE SEEKER', pointsRequired: 1 },
-    { name: 'INITIATE', pointsRequired: 31 },
-    { name: 'APPRENTICE', pointsRequired: 61 },
-    { name: 'EXPLORER', pointsRequired: 81 },
-    { name: 'VISIONARY', pointsRequired: 101 },
-    { name: 'ADEPT', pointsRequired: 121 },
-    { name: 'SEER', pointsRequired: 141 },
-    { name: 'ORACLE', pointsRequired: 161 },
-    { name: 'MASTER REMOTE VIEWER', pointsRequired: 181 },
-    { name: 'ASCENDING MASTER', pointsRequired: null },
+    { name: "NOVICE SEEKER", pointsRequired: 1 },
+    { name: "INITIATE", pointsRequired: 31 },
+    { name: "APPRENTICE", pointsRequired: 61 },
+    { name: "EXPLORER", pointsRequired: 81 },
+    { name: "VISIONARY", pointsRequired: 101 },
+    { name: "ADEPT", pointsRequired: 121 },
+    { name: "SEER", pointsRequired: 141 },
+    { name: "ORACLE", pointsRequired: 161 },
+    { name: "MASTER REMOTE VIEWER", pointsRequired: 181 },
+    { name: "ASCENDING MASTER", pointsRequired: null },
   ];
 
   // Find current tier index
@@ -179,20 +179,30 @@ userSchema.pre('save', function (next) {
     (tier) => tier.name === this.tierRank
   );
   if (currentTierIndex === -1) {
-    console.warn(`Invalid tierRank: ${this.tierRank}, defaulting to NOVICE SEEKER`);
+    console.warn(
+      `Invalid tierRank: ${this.tierRank}, defaulting to NOVICE SEEKER`
+    );
     currentTierIndex = 0;
   }
 
   // Get the next tier
-  const nextTierIndex = currentTierIndex + 1 < tierTable.length ? currentTierIndex + 1 : currentTierIndex;
+  const nextTierIndex =
+    currentTierIndex + 1 < tierTable.length
+      ? currentTierIndex + 1
+      : currentTierIndex;
   const nextTier = tierTable[nextTierIndex];
 
   // Calculate nextTierPoint
   let nextTierPoint;
   if (nextTier.pointsRequired === null) {
     nextTierPoint = 0; // No next tier (ASCENDING MASTER)
-  } else if (typeof nextTier.pointsRequired !== 'number' || typeof points !== 'number') {
-    console.error(`Invalid points data: pointsRequired=${nextTier.pointsRequired}, points=${points}`);
+  } else if (
+    typeof nextTier.pointsRequired !== "number" ||
+    typeof points !== "number"
+  ) {
+    console.error(
+      `Invalid points data: pointsRequired=${nextTier.pointsRequired}, points=${points}`
+    );
     nextTierPoint = 0; // Fallback to 0 on error
   } else {
     nextTierPoint = Math.max(nextTier.pointsRequired - points, 0);
@@ -261,11 +271,11 @@ userSchema.methods.updateSession = async function () {
   const now = new Date();
   this.lastActive = now;
 
-  const activeSession = this.sessions.find(s => !s.sessionEndTime);
+  const activeSession = this.sessions.find((s) => !s.sessionEndTime);
 
   if (!activeSession) {
     this.sessions.push({
-      sessionStartTime: now
+      sessionStartTime: now,
     });
   }
 

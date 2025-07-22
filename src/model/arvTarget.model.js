@@ -19,16 +19,16 @@ const ARVTargetSchema = new Schema(
     outcomeTime: {
       type: Date,
     },
-    bufferTime: {
-      type: Date,
-    },
-    gameDuration: { type: Number, required: true },
-    revealDuration: { type: Number, required: true },
-    outcomeDuration: { type: Number, required: true },
-    bufferDuration: { type: Number, required: true },
+    // bufferTime: {
+    //   type: Date,
+    // },
     gameTime: {
       type: Date,
     },
+    gameDuration: { type: Number },
+    revealDuration: { type: Number },
+    outcomeDuration: { type: Number },
+    // bufferDuration: { type: Number, default: 3 },
     image1: {
       url: { type: String, required: true },
       description: { type: String, required: true },

@@ -19,10 +19,9 @@ export const createARVTarget = async (req, res, next) => {
   const {
     eventName,
     eventDescription,
-    gameDuration, // in minutes
-    revealDuration, // in minutes
-    outcomeDuration, // in minutes
-    bufferDuration, // in minutes
+    gameTime, // ISO string
+    revealTime, // ISO string
+    outcomeTime, // ISO string
     image1,
     image2,
     image3,
@@ -30,8 +29,35 @@ export const createARVTarget = async (req, res, next) => {
   } = req.body;
 
   try {
-    let code, arvCode, tmcCode;
+    // Validate timestamps
+    const now = new Date();
+    const gameTimeDate = new Date(gameTime);
+    const revealTimeDate = new Date(revealTime);
+    const outcomeTimeDate = new Date(
+      new Date(outcomeTime).getTime() + 5 * 60 * 1000
+    );
 
+    console.log(outcomeTimeDate);
+    // const outcomeTimeDate = new Date(
+    //   new Date(outcomeTime).getTime() + 2 * 60 * 60 * 1000
+    // );
+
+    if (gameTimeDate <= now) {
+      return res.status(400).json({
+        status: false,
+        message: "Game time must be in the future",
+      });
+    }
+
+    if (!(gameTimeDate < revealTimeDate < outcomeTimeDate)) {
+      return res.status(400).json({
+        status: false,
+        message: "Times must be in order: gameTime < revealTime < outcomeTime",
+      });
+    }
+
+    // Generate unique code
+    let code, arvCode, tmcCode;
     do {
       code = generateCode();
       arvCode = await ARVTarget.findOne({ code });
@@ -42,10 +68,9 @@ export const createARVTarget = async (req, res, next) => {
       code,
       eventName,
       eventDescription,
-      gameDuration,
-      revealDuration,
-      outcomeDuration,
-      bufferDuration,
+      gameTime: gameTimeDate,
+      revealTime: revealTimeDate,
+      outcomeTime: outcomeTimeDate,
       image1,
       image2,
       image3,
