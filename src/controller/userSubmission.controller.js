@@ -85,6 +85,8 @@ export const checkTierUpdate = async (userId) => {
       };
     }
 
+    const io = req.app.get("io");
+
     await emitNotification(io, {
       userId,
       message: `Your cycle has been renewed. Your previous total points ${updateResult.previousPoints}, your previous tier is ${updateResult.previousTier} and your new tier is ${updateResult.newTier}.`,
@@ -496,13 +498,11 @@ export const getTMCTargetResult = async (req, res, next) => {
   const userId = req.user._id;
 
   try {
-    // Find UserSubmission for the user
     const result = await UserSubmission.findOne(
       { userId, "participatedTMCTargets.TMCId": TMCTargetId },
       { participatedTMCTargets: 1, _id: 0 }
     );
 
-    // If no result found, return a proper error message
     if (!result || !result.participatedTMCTargets.length) {
       return res.status(404).json({
         status: false,
@@ -510,14 +510,16 @@ export const getTMCTargetResult = async (req, res, next) => {
       });
     }
 
-    // Extract the specific participated TMC target
-    const targetResult = result.participatedTMCTargets[0];
+    // ✅ Find the exact TMC entry from array that matches the given TMCTargetId
+    const targetResult = result.participatedTMCTargets.find(
+      (entry) => entry.TMCId.toString() === TMCTargetId
+    );
 
-    // If TMCId is still null after population, the referenced document might not exist
-    if (!targetResult.TMCId) {
+    if (!targetResult) {
       return res.status(404).json({
         status: false,
-        message: "The referenced TMC Target no longer exists.",
+        message:
+          "The referenced TMC Target no longer exists in user's submissions.",
       });
     }
 
