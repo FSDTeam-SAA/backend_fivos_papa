@@ -24,6 +24,7 @@ const TMCTargetSchema = new Schema(
     revealNotified: { type: Boolean, default: false },
     bufferNotified: { type: Boolean, default: false },
     startNotified: { type: Boolean, default: false },
+    activeTMCGameTime: { type: Date },
     status: {
       type: String,
       enum: [
