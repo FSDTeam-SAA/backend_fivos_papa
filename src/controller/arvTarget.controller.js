@@ -267,12 +267,14 @@ export const updateResultImage = async (req, res, next) => {
         (entry) => entry.ARVId.toString() === id.toString()
       );
 
+      console.log(target);
+
       const userId = submission.userId._id;
       const points = target?.points || 0;
 
       // Emit to user
       io.to(`user_${userId}`).emit("notification", {
-        message: `Result image revealed for game ${game.code}. You earned ${points} points.`,
+        message: `Result is published for game ${game.code}. You earned ${points} points.`,
         targetCode: game.code,
       });
 

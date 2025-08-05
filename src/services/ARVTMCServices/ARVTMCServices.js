@@ -118,6 +118,7 @@ export const startNextGameService = async (model, res, next, gameName) => {
       status: "active",
       isQueued: false,
       startNotified: true,
+      activeTMCGameTime: new Date(),
     };
 
     updateFields.startTime = now;
@@ -192,6 +193,7 @@ export const startNextGameFromCron = async (model, io, log, gameName) => {
 
     if (gameName === "TMC") {
       updateFields.startTime = now;
+      updateFields.activeTMCGameTime = new Date();
       updateFields.revealTime = addMinutes(now, nextGame.gameDuration);
       updateFields.bufferTime = addMinutes(
         updateFields.revealTime,
