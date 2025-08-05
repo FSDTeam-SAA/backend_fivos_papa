@@ -212,6 +212,7 @@ export const startNextGameFromCron = async (model, io, log, gameName) => {
       updateFields.gameTime = nextGame.gameTime;
       updateFields.revealTime = nextGame.revealTime;
       updateFields.outcomeTime = nextGame.outcomeTime;
+      updateFields.activeARVGameTime = new Date();
     }
 
     const startedGame = await model
@@ -253,11 +254,14 @@ export const updateRemoveFromQueueService = async (
       $pull: { [queueField]: id },
     });
 
+    console.log(res);
+
     return res
       .status(200)
       .json({ status: true, message: "Removed from queue successfully" });
   } catch (error) {
-    next(error);
+    console.error("Error in updateRemoveFromQueueService:", error);
+    next();
   }
 };
 
