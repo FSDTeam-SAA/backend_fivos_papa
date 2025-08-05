@@ -198,7 +198,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
                 await emitNotification(io, {
                   userId: submission.userId,
                   targetCode: code,
-                  message: `Your ARV game ${code} has been revealed! You earned ${entry.points} points.`,
+                  message: `Your ARV game ${code} has been revealed!`,
                 });
               }
             }
@@ -207,8 +207,8 @@ const manageGameLifecycle = async (io, model, gameName) => {
 
           await emitGlobalNotification(io, {
             message: messageSent
-              ? `ARV game ${code} has been revealed!`
-              : `ARV game ${code} has been revealed!`,
+              ? `Your ARV game ${code} has been revealed!`
+              : `Your ARV game ${code} has been revealed!`,
             targetCode: code,
           });
         }
