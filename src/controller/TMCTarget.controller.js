@@ -222,7 +222,7 @@ export const updateRemoveFromQueue = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    await updateRemoveFromQueueService(id, TMCTarget, res, next);
+    await updateRemoveFromQueueService(id, TMCTarget, "TMC", res, next);
   } catch (error) {
     next(error);
   }

@@ -25,6 +25,9 @@ const ARVTargetSchema = new Schema(
     gameTime: {
       type: Date,
     },
+    activeARVGameTime: {
+      type: Date,
+    },
     gameDuration: { type: Number },
     revealDuration: { type: Number },
     outcomeDuration: { type: Number },

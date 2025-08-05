@@ -314,7 +314,7 @@ export const updateRemoveFromQueue = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    await updateRemoveFromQueueService(id, ARVTarget, res, next);
+    await updateRemoveFromQueueService(id, ARVTarget, "ARV", res, next);
   } catch (error) {
     next(error);
   }
