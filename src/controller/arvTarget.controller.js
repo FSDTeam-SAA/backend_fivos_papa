@@ -281,7 +281,7 @@ export const updateResultImage = async (req, res, next) => {
       // Save to DB
       await Notification.create({
         userId,
-        message: `Result image revealed for game ${game.code}. You earned ${points} points.`,
+        message: `Result image published for game ${game.code}. You earned ${points} points.`,
         targetCode: game.code,
       });
     }

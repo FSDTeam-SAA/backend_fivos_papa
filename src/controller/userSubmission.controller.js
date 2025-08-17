@@ -263,7 +263,7 @@ export const submitARVGame = async (req, res, next) => {
 
     // Find the ARV target
     const ARV = await ARVTarget.findById(ARVTargetId).select(
-      "status gameTime revealTime"
+      "status gameTime revealTime outcomeTime"
     );
     if (!ARV) {
       return res
@@ -287,21 +287,19 @@ export const submitARVGame = async (req, res, next) => {
       });
     }
 
-    if (currentTime.getTime() >= ARV.revealTime.getTime()) {
+    if (currentTime >= ARV.revealTime) {
       return res.status(403).json({
         status: false,
         message: "Game submission period has ended",
-        details: {
-          lastSubmissionTime: ARV.revealTime,
-          currentTime,
-        },
+        details: { lastSubmissionTime: ARV.revealTime, currentTime },
       });
     }
 
     // Find or create user submission
     let userSubmission = await UserSubmission.findOne({ userId });
+
     if (!userSubmission) {
-      userSubmission = new UserSubmission({
+      userSubmission = await UserSubmission.create({
         userId,
         completedChallenges: 0,
         totalPoints: 0,
@@ -323,22 +321,21 @@ export const submitARVGame = async (req, res, next) => {
       });
     }
 
-    // Update user submission
+    // Push new submission
     userSubmission.participatedARVTargets.push({
       ARVId: ARVTargetId,
       submittedImage,
-      points: 0,
+      points: 0, // initially 0, updated later in updateARVTargetPoints
       submissionTime: currentTime,
     });
 
     userSubmission.completedChallenges += 1;
     await userSubmission.save();
 
-    // Update user profile using save() to ensure pre('save') runs
-    const updatedUser = await User.findById(userId);
-    updatedUser.totalPoints = userSubmission.totalPoints;
-    updatedUser.targetsLeft -= 1;
-    await updatedUser.save();
+    // Update user profile
+    currentUser.totalPoints = userSubmission.totalPoints;
+    currentUser.targetsLeft -= 1;
+    await currentUser.save();
 
     return res.status(200).json({
       status: true,
@@ -347,13 +344,10 @@ export const submitARVGame = async (req, res, next) => {
         revealTime: ARV.revealTime,
         outcomeTime: ARV.outcomeTime,
         gameTime: ARV.gameTime,
-        submissionStatus: {
-          canSubmit: true,
-          until: ARV.revealTime,
-        },
+        submissionStatus: { canSubmit: true, until: ARV.revealTime },
       },
-      targetsLeft: updatedUser.targetsLeft,
-      nextTierPoint: updatedUser.nextTierPoint,
+      targetsLeft: currentUser.targetsLeft,
+      nextTierPoint: currentUser.nextTierPoint,
     });
   } catch (error) {
     next(error);
