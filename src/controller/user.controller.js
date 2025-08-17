@@ -49,7 +49,7 @@ const registerUser = async (req, res) => {
 
     // Remove pass from response
     const createdUser = await User.findById(user._id).select(
-      "-password -tierRank -point -tmcScore -arvScore -combinedScore -leaderboardPosition -completedTargets -successRate"
+      "-password -tierRank -point -tmcScore -arvScore -combinedScore -leaderboardPosition -completedTargets -successRate -sessions"
     );
 
     return res.status(201).json({
@@ -101,10 +101,10 @@ const loginUser = async (req, res) => {
   await User.findByIdAndUpdate(user._id, {
     $push: {
       sessions: {
-        sessionStartTime: new Date()
-      }
+        sessionStartTime: new Date(),
+      },
     },
-    lastActive: new Date()
+    lastActive: new Date(),
   });
 
   // implement access and refresh token
@@ -114,7 +114,7 @@ const loginUser = async (req, res) => {
 
   // remove password and refreshToken filed from response
   const loggedUser = await User.findById(user._id).select(
-    "-password -refreshToken"
+    "-password -refreshToken -tierRank -point -tmcScore -arvScore -combinedScore -leaderboardPosition -completedTargets -successRate -sessions"
   );
 
   res.setHeader("Authorization", `Bearer ${accessToken}`);
@@ -123,7 +123,7 @@ const loginUser = async (req, res) => {
     status: true,
     message: "User logged in successfully",
     data: loggedUser,
-    token: accessToken
+    token: accessToken,
   });
 };
 
@@ -142,17 +142,18 @@ const logoutUser = async (req, res) => {
     await User.updateOne(
       {
         _id: user._id,
-        'sessions.sessionEndTime': { $exists: false }
+        "sessions.sessionEndTime": { $exists: false },
       },
       {
         $set: {
-          'sessions.$[elem].sessionEndTime': new Date(),
-          'sessions.$[elem].duration':
-            new Date() - user.sessions.find(s => !s.sessionEndTime).sessionStartTime
-        }
+          "sessions.$[elem].sessionEndTime": new Date(),
+          "sessions.$[elem].duration":
+            new Date() -
+            user.sessions.find((s) => !s.sessionEndTime).sessionStartTime,
+        },
       },
       {
-        arrayFilters: [{ 'elem.sessionEndTime': { $exists: false } }]
+        arrayFilters: [{ "elem.sessionEndTime": { $exists: false } }],
       }
     );
 
@@ -331,8 +332,8 @@ const resetPassword = async (req, res) => {
   try {
     const { newPassword } = req.body;
 
-    const { email } = req.body
-    const user = await User.findOne({email});
+    const { email } = req.body;
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(404).json({
