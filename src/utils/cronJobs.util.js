@@ -11,6 +11,7 @@ import {
 import { startNextGameFromCron } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
 import { GameQueue } from "../model/gameQueue.model.js";
+import { updateUserTier } from "../controller/tier.controller.js";
 
 const addMinutes = (start, minutes) => {
   if (!start || isNaN(start.getTime())) {
@@ -48,7 +49,9 @@ const checkInactiveUsers = async (io) => {
     if (bulkOps.length > 0) {
       await User.bulkWrite(bulkOps);
     }
-  } catch (error) {}
+  } catch (error) {
+    console.error("Error in checkInactiveUsers:", error);
+  }
 };
 
 const manageGameLifecycle = async (io, model, gameName) => {
@@ -77,6 +80,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         revealNotified,
         outcomeNotified,
         bufferNotified,
+        resultImage,
       } = game;
 
       const baseTime = gameName === "TMC" ? startTime : gameTime;
@@ -90,7 +94,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           isActive: false,
           isPartiallyActive: false,
           status: "expired",
-          outcomeTime: now, // Use outcomeTime for ARV consistency
+          outcomeTime: now,
         });
 
         await CompletedTargets.findOneAndUpdate(
@@ -214,20 +218,13 @@ const manageGameLifecycle = async (io, model, gameName) => {
         }
       }
 
-      // ARV Outcome
+      // ARV Outcome with Auto-Point Calculation
       if (
         gameName === "ARV" &&
         status === "revealed" &&
         now.getTime() >= revealEnd.getTime() &&
         !outcomeNotified
       ) {
-        await model.findByIdAndUpdate(_id, {
-          isActive: false,
-          isPartiallyActive: true,
-          status: "completed",
-          outcomeNotified: true,
-        });
-
         const submissions = await UserSubmission.find({
           "participatedARVTargets.ARVId": _id,
         });
@@ -238,16 +235,37 @@ const manageGameLifecycle = async (io, model, gameName) => {
             const entry = submission.participatedARVTargets.find(
               (e) => e.ARVId.toString() === _id.toString()
             );
-            if (entry) {
-              await emitNotification(io, {
-                userId: submission.userId,
-                targetCode: code,
-                message: `ARV game ${code} has reached outcome! You earned ${entry.points} points.`,
-              });
+            if (entry && entry.points === 0) {
+              const points = entry.submittedImage === resultImage ? 25 : -10;
+              entry.points = points;
+              submission.totalPoints = Math.max(
+                0,
+                submission.totalPoints + points
+              );
+              await submission.save();
+
+              const user = await User.findById(submission.userId);
+              if (user) {
+                user.totalPoints = submission.totalPoints;
+                await user.save();
+
+                const tierUpdate = await updateUserTier(user._id);
+                if (tierUpdate?.changed) {
+                  submission.tierRank = tierUpdate.newTier;
+                  await submission.save();
+                }
+              }
+              messageSent = true;
             }
           }
-          messageSent = true;
         }
+
+        await model.findByIdAndUpdate(_id, {
+          isActive: false,
+          isPartiallyActive: true,
+          status: "completed",
+          outcomeNotified: true,
+        });
 
         await emitGlobalNotification(io, {
           message: messageSent
@@ -255,6 +273,12 @@ const manageGameLifecycle = async (io, model, gameName) => {
             : `ARV game ${code} has reached outcome!`,
           targetCode: code,
         });
+        await Notification.create([
+          {
+            message: `ARV game ${code} has reached outcome!`,
+            targetCode: code,
+          },
+        ]);
       }
 
       // Expire Logic (TMC after buffer, ARV after outcome)
@@ -411,7 +435,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         );
         if (nextGame) {
           await emitGlobalNotification(io, {
-            message: `New ARV game ${nextGame.code} has started!`,
+            message: `New ${gameName} game ${nextGame.code} has started!`,
             targetCode: nextGame.code,
           });
         }
