@@ -216,7 +216,8 @@ export const submitTMCGame = async (req, res, next) => {
 
     // Update user profile using save() to ensure pre('save') runs
     const updatedUser = await User.findById(userId);
-    updatedUser.totalPoints = userSubmission.totalPoints;
+    updatedUser.totalPoints =
+      userSubmission.totalPoints > 0 ? userSubmission.totalPoints : 0;
     updatedUser.targetsLeft -= 1;
     await updatedUser.save();
 
@@ -333,7 +334,8 @@ export const submitARVGame = async (req, res, next) => {
     await userSubmission.save();
 
     // Update user profile
-    currentUser.totalPoints = userSubmission.totalPoints;
+    currentUser.totalPoints =
+      userSubmission.totalPoints > 0 ? userSubmission.totalPoints : 0;
     currentUser.targetsLeft -= 1;
     await currentUser.save();
 
@@ -599,7 +601,9 @@ export const updateARVTargetPoints = async (req, res, next) => {
       { "participatedARVTargets.$": 1, _id: 0 }
     );
 
-    const { submittedImage } = result.participatedARVTargets[0];
+    const length = result.participatedARVTargets.length;
+
+    const { submittedImage } = result.participatedARVTargets[length - 1];
 
     // Calculate points
     points = ARV.resultImage === submittedImage ? 25 : -10;

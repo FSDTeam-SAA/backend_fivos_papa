@@ -15,12 +15,14 @@ import {
   updateMakeComplete,
   getPendingOutcomeGames,
   getARVTargetWithNullResultImage,
+  getARVByCode,
 } from "../controller/arvTarget.controller.js";
 
 const router = express.Router();
 
 //admin
 router.post("/create-ARVTarget", createARVTarget);
+router.get("/getARVGame/:code", getARVByCode);
 router.get("/get-allARVTargets", getAllARVTargets);
 router.get("/get-allQueuedARVTargets", getAllQueuedARVTargets);
 router.get("/get-allUnQueuedARVTargets", getAllUnQueuedARVTargets);

@@ -160,7 +160,6 @@ const manageGameLifecycle = async (io, model, gameName) => {
             "participatedTMCTargets.TMCId": _id,
           });
 
-          let messageSent = false;
           if (submissions.length > 0) {
             for (const submission of submissions) {
               const entry = submission.participatedTMCTargets.find(
@@ -174,21 +173,12 @@ const manageGameLifecycle = async (io, model, gameName) => {
                 });
               }
             }
-            messageSent = true;
           }
-
-          await emitGlobalNotification(io, {
-            message: messageSent
-              ? `TMC game ${code} has been revealed!`
-              : `TMC game ${code} has been revealed!`,
-            targetCode: code,
-          });
         } else if (gameName === "ARV") {
           const submissions = await UserSubmission.find({
             "participatedARVTargets.ARVId": _id,
           });
 
-          let messageSent = false;
           if (submissions.length > 0) {
             for (const submission of submissions) {
               const entry = submission.participatedARVTargets.find(
@@ -202,15 +192,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
                 });
               }
             }
-            messageSent = true;
           }
-
-          await emitGlobalNotification(io, {
-            message: messageSent
-              ? `Your ARV game ${code} has been revealed!`
-              : `Your ARV game ${code} has been revealed!`,
-            targetCode: code,
-          });
         }
       }
 
@@ -231,8 +213,6 @@ const manageGameLifecycle = async (io, model, gameName) => {
         const submissions = await UserSubmission.find({
           "participatedARVTargets.ARVId": _id,
         });
-
-        let messageSent = false;
         if (submissions.length > 0) {
           for (const submission of submissions) {
             const entry = submission.participatedARVTargets.find(
@@ -242,19 +222,11 @@ const manageGameLifecycle = async (io, model, gameName) => {
               await emitNotification(io, {
                 userId: submission.userId,
                 targetCode: code,
-                message: `ARV game ${code} has reached outcome! You earned ${entry.points} points.`,
+                message: `ARV game ${code} has reached outcome! Wait for the result.`,
               });
             }
           }
-          messageSent = true;
         }
-
-        await emitGlobalNotification(io, {
-          message: messageSent
-            ? `ARV game ${code} has reached outcome!`
-            : `ARV game ${code} has reached outcome!`,
-          targetCode: code,
-        });
       }
 
       // Expire Logic (TMC after buffer, ARV after outcome)

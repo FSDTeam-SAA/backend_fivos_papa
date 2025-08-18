@@ -12,6 +12,7 @@ import {
   updateMakeComplete,
   startNextGame,
   getActiveTMCTarget,
+  deleteTMCTarget,
 } from "../controller/TMCTarget.controller.js";
 
 const router = express.Router();
@@ -29,5 +30,6 @@ router.patch("/update-TMCTarget-gameTime/:id", updateGameTime);
 router.patch("/update-startNextGame", startNextGame);
 router.patch("/update-TMCTarget-makeInactive/:id", updateMakeInactive);
 router.patch("/update-TMCTarget-makeComplete/:id", updateMakeComplete);
+router.delete("/delete-TMC/:id", deleteTMCTarget);
 
 export default router;
