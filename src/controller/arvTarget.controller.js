@@ -14,6 +14,8 @@ import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
 import { Notification } from "../model/notification.model.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
 import { GameQueue } from "../model/gameQueue.model.js";
+import { User } from "../model/user.model.js";
+import { checkTierUpdate } from "./userSubmission.controller.js";
 
 export const createARVTarget = async (req, res, next) => {
   const {
@@ -121,6 +123,29 @@ export const getAllARVTargets = async (req, res, next) => {
         itemsPerPage: limit,
       },
       message: "All ARVTargets fetched successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getARVByCode = async (req, res, next) => {
+  const { code } = req.params;
+
+  try {
+    const ARVTargetData = await ARVTarget.findOne({ code });
+
+    if (!ARVTargetData) {
+      return res.status(404).json({
+        status: false,
+        message: "ARV Target not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      data: ARVTargetData,
+      message: "ARV Target fetched successfully",
     });
   } catch (error) {
     next(error);
@@ -250,10 +275,14 @@ export const updateResultImage = async (req, res, next) => {
         .json({ status: false, message: "Result image already revealed" });
     }
 
-    await ARVTarget.findByIdAndUpdate(id, {
-      resultImage,
-      isResultRevealed: true,
-    });
+    const ARV = await ARVTarget.findByIdAndUpdate(
+      id,
+      {
+        resultImage,
+        isResultRevealed: true,
+      },
+      { new: true }
+    );
 
     const io = req.app.get("io");
 
@@ -262,15 +291,50 @@ export const updateResultImage = async (req, res, next) => {
       "participatedARVTargets.ARVId": id,
     }).populate("userId");
 
+    // for (const submission of submissions) {
+    //   const target = submission.participatedARVTargets.find(
+
+    //     (entry) => entry.ARVId.toString() === id.toString()
+    //   );
+
     for (const submission of submissions) {
       const target = submission.participatedARVTargets.find(
         (entry) => entry.ARVId.toString() === id.toString()
       );
 
-      console.log(target);
+      if (!target) continue;
+
+      const submittedImages = target.submittedImage || [];
+
+      let points;
+
+      if (submittedImages === ARV.resultImage) {
+        points = 25;
+      } else {
+        points = -10;
+      }
+
+      target.points = points;
+
+      const positivePoints = (submission.totalPoints || 0) + points;
+
+      // Update total points in submission
+      submission.totalPoints = positivePoints > 0 ? positivePoints : 0;
+      await submission.save();
+
+      // Update user’s totalPoints
+      const user = await User.findById(submission.userId);
+      if (user) {
+        const possitivePoints = user.totalPoints + points;
+        user.totalPoints = possitivePoints > 0 ? possitivePoints : 0;
+        await user.save();
+
+        // Tier check
+        await checkTierUpdate(user._id);
+      }
 
       const userId = submission.userId._id;
-      const points = target?.points || 0;
+      // const points = target?.points || 0;
 
       // Emit to user
       io.to(`user_${userId}`).emit("notification", {

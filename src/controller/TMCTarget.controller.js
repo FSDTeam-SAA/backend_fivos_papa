@@ -283,3 +283,26 @@ export const updateMakeComplete = async (req, res, next) => {
     next(error);
   }
 };
+
+export const deleteTMCTarget = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const deletedTarget = await TMCTarget.findByIdAndDelete(id);
+
+    if (!deletedTarget) {
+      return res.status(404).json({
+        status: false,
+        message: "TMC Target not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "TMC Target deleted successfully",
+      data: deletedTarget,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
