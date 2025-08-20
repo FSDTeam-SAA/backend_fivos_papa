@@ -194,7 +194,7 @@ export const submitTMCGame = async (req, res, next) => {
     if (TMC.targetImage === firstChoiceImage) {
       points = 25;
     } else if (TMC.targetImage === secondChoiceImage) {
-      points = 10;
+      points = 15;
     } else {
       points = -10;
     }
@@ -209,7 +209,8 @@ export const submitTMCGame = async (req, res, next) => {
     });
 
     userSubmission.completedChallenges += 1;
-    userSubmission.totalPoints += points;
+    const possitivePoint = userSubmission.totalPoints + points;
+    userSubmission.totalPoints = possitivePoint > 0 ? possitivePoint : 0;
     userSubmission.lastChallengeDate = new Date();
 
     await userSubmission.save();
