@@ -361,7 +361,9 @@ export const submitARVGame = async (req, res, next) => {
 export const getCompletedTargets = async (req, res, next) => {
   try {
     // Fetch all user submissions
-    const allSubmissions = await UserSubmission.find({});
+    const allSubmissions = await UserSubmission.find({}).sort({
+      createdAt: -1,
+    });
 
     // Initialize counters
     let totalTMCCompleted = 0;
@@ -442,7 +444,9 @@ export const getPreviousTMCResults = async (req, res) => {
   const { currentTMCTargetId } = req.params;
 
   try {
-    const userSubmission = await UserSubmission.findOne({ userId });
+    const userSubmission = await UserSubmission.findOne({ userId }).sort({
+      createdAt: -1,
+    });
 
     if (!userSubmission) {
       return res.status(404).json({ message: "No submissions found" });
