@@ -133,7 +133,9 @@ export const getARVByCode = async (req, res, next) => {
   const { code } = req.params;
 
   try {
-    const ARVTargetData = await ARVTarget.findOne({ code });
+    const ARVTargetData = await ARVTarget.findOne({ code }).sort({
+      createdAt: -1,
+    });
 
     if (!ARVTargetData) {
       return res.status(404).json({
@@ -470,7 +472,9 @@ export const stopQueue = async (req, res, next) => {
 // Get arv target when the resultImage is null or ""
 export const getARVTargetWithNullResultImage = async (req, res, next) => {
   try {
-    const arvTarget = await ARVTarget.find({ resultImage: "" });
+    const arvTarget = await ARVTarget.find({ resultImage: "" }).sort({
+      createdAt: -1,
+    });
     return res.status(200).json({ status: true, data: arvTarget });
   } catch (error) {
     next(error);
