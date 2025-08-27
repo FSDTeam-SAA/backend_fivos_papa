@@ -73,7 +73,6 @@ export const getNotifications = async (req, res, next) => {
     const [notifications, totalItems] = await Promise.all([
       await Notification.find({
         $or: [{ userId }, { userId: null }],
-        read: false,
       })
         .skip(skip)
         .limit(limit)
@@ -84,7 +83,10 @@ export const getNotifications = async (req, res, next) => {
     ]);
 
     // count unread notifications
-    const unreadCount = notifications.length;
+    const unreadCount = await Notification.countDocuments({
+      userId,
+      read: false,
+    });
 
     const totalPages = Math.ceil(totalItems / limit);
 
