@@ -311,7 +311,7 @@ export const updateResultImage = async (req, res, next) => {
       let points;
 
       if (submittedImages === ARV.resultImage) {
-        points = 25;
+        points = 30;
       } else {
         points = -10;
       }

@@ -32,6 +32,35 @@ export const createNotification = async (req, res, next) => {
   }
 };
 
+// Mark all notification read
+export const markAllNotificationRead = async (req, res, next) => {
+  try {
+    await Notification.updateMany({}, { read: true });
+
+    return res.status(200).json({
+      status: true,
+      message: "All notifications marked as read",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const notificationAsRead = async (req, res, next) => {
+  const { notificationId } = req.params;
+
+  try {
+    await Notification.findByIdAndUpdate(notificationId, { read: true });
+
+    return res.status(200).json({
+      status: true,
+      message: "Notification marked as read",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ... rest of your existing controller methods ...
 
 export const getNotifications = async (req, res, next) => {
@@ -44,6 +73,7 @@ export const getNotifications = async (req, res, next) => {
     const [notifications, totalItems] = await Promise.all([
       await Notification.find({
         $or: [{ userId }, { userId: null }],
+        read: false,
       })
         .skip(skip)
         .limit(limit)
@@ -53,12 +83,15 @@ export const getNotifications = async (req, res, next) => {
       }),
     ]);
 
+    // count unread notifications
+    const unreadCount = notifications.length;
+
     const totalPages = Math.ceil(totalItems / limit);
 
     return res.status(200).json({
       status: true,
       message: "Notifications fetched successfully",
-      data: notifications,
+      data: { notifications, unreadCount },
       pagination: {
         totalItems,
         totalPages,
