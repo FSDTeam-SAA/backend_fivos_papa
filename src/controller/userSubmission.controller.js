@@ -49,7 +49,7 @@ const cumulativeStdNormalProbability = (z) => {
 };
 
 // Check if user's tier should be updated and also renew the cycle
-export const checkTierUpdate = async (userId) => {
+export const checkTierUpdate = async (userId, io) => {
   try {
     const userSubmission = await UserSubmission.findOne({ userId });
     if (!userSubmission) {
@@ -85,8 +85,6 @@ export const checkTierUpdate = async (userId) => {
       };
     }
 
-    const io = req.app.get("io");
-
     await emitNotification(io, {
       userId,
       message: `Your cycle has been renewed. Your previous total points ${updateResult.previousPoints}, your previous tier is ${updateResult.previousTier} and your new tier is ${updateResult.newTier}.`,
@@ -104,7 +102,6 @@ export const checkTierUpdate = async (userId) => {
     throw error;
   }
 };
-
 // Submit TMC game
 export const submitTMCGame = async (req, res, next) => {
   const { firstChoiceImage, secondChoiceImage, TMCTargetId } = req.body;
@@ -189,28 +186,16 @@ export const submitTMCGame = async (req, res, next) => {
       });
     }
 
-    // Calculate points based on choices
-    let points = 0;
-    if (TMC.targetImage === firstChoiceImage) {
-      points = 25;
-    } else if (TMC.targetImage === secondChoiceImage) {
-      points = 15;
-    } else {
-      points = -10;
-    }
-
-    // Update user submission
+    // Store choices without calculating points
     userSubmission.participatedTMCTargets.push({
       TMCId: TMCTargetId,
       firstChoiceImage,
       secondChoiceImage,
-      points,
+      points: null,
       submissionTime: currentTime,
     });
 
     userSubmission.completedChallenges += 1;
-    const possitivePoint = userSubmission.totalPoints + points;
-    userSubmission.totalPoints = possitivePoint > 0 ? possitivePoint : 0;
     userSubmission.lastChallengeDate = new Date();
 
     await userSubmission.save();
@@ -222,19 +207,15 @@ export const submitTMCGame = async (req, res, next) => {
     updatedUser.targetsLeft -= 1;
     await updatedUser.save();
 
-    // Check for tier update
-    const tierUpdate = await checkTierUpdate(userId);
-
     return res.status(200).json({
       status: true,
-      message: "TMC game submitted successfully",
-      points,
+      message:
+        "TMC game submitted successfully. Points will be awarded at reveal time.",
       currentTier: updatedUser.tierRank,
       totalPoints: updatedUser.totalPoints,
       targetsLeft: updatedUser.targetsLeft,
       nextTierPoint: updatedUser.nextTierPoint,
       gamesCompleted: userSubmission.completedChallenges,
-      tierUpdate,
     });
   } catch (error) {
     next(error);
