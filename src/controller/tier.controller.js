@@ -130,6 +130,93 @@ export const getNextUserTierInfo = async (req, res, next) => {
   }
 };
 
+// export const updateUserTier = async (userId) => {
+//   const session = await mongoose.startSession();
+//   try {
+//     let result = null;
+//     await session.withTransaction(async () => {
+//       const [user, userSubmission] = await Promise.all([
+//         User.findById(userId).session(session),
+//         UserSubmission.findOne({ userId }).session(session),
+//       ]);
+
+//       if (!user || !userSubmission) {
+//         throw new Error("User data not found");
+//       }
+
+//       let finalPoints = userSubmission.totalPoints;
+//       const daysInCycle = Math.floor(
+//         (new Date() -
+//           (userSubmission.lastChallengeDate || userSubmission.createdAt)) /
+//           (1000 * 60 * 60 * 24)
+//       );
+
+//       // Apply penalty only if 15 days passed and not completed 10 games
+//       if (daysInCycle >= 15 && userSubmission.completedChallenges < 10) {
+//         const missingGames = 10 - userSubmission.completedChallenges;
+//         finalPoints -= missingGames * 10;
+//         finalPoints = Math.max(finalPoints, -29); // Minimum points protection
+//       }
+
+//       const newTier = calculateNewTier(user.tierRank, finalPoints);
+
+//       // Reset points and challenges for the new cycle
+//       const resetPoints = 0;
+//       const resetChallenges = 0;
+//       const resetTargetsLeft = 10;
+
+//       await Promise.all([
+//         User.updateOne(
+//           { _id: userId },
+//           {
+//             $set: {
+//               tierRank: newTier,
+//               totalPoints: resetPoints,
+//               targetsLeft: resetTargetsLeft,
+//             },
+//           },
+//           { session }
+//         ),
+//         UserSubmission.updateOne(
+//           { userId },
+//           {
+//             $set: {
+//               tierRank: newTier,
+//               totalPoints: resetPoints,
+//               completedChallenges: resetChallenges,
+//               lastChallengeDate: new Date(),
+//             },
+//           },
+//           { session }
+//         ),
+//       ]);
+
+//       // Assign the result to return after the transaction
+//       result = {
+//         status: true,
+//         message: "Tier updated and points reset for new cycle",
+//         previousTier: user.tierRank,
+//         newTier,
+//         pointsReset: true,
+//         resetValue: resetPoints,
+//         previousPoints: finalPoints,
+//       };
+//     });
+
+//     // Ensure result is returned
+//     if (!result) {
+//       throw new Error("Transaction failed: No result generated");
+//     }
+
+//     return result; // Return the result after the transaction
+//   } catch (error) {
+//     console.error("Tier update failed:", error);
+//     throw error;
+//   } finally {
+//     session.endSession();
+//   }
+// };
+
 export const updateUserTier = async (userId) => {
   const session = await mongoose.startSession();
   try {
@@ -151,16 +238,16 @@ export const updateUserTier = async (userId) => {
           (1000 * 60 * 60 * 24)
       );
 
-      // Apply penalty only if 15 days passed and not completed 10 games
-      if (daysInCycle >= 15 && userSubmission.completedChallenges < 10) {
+      // Apply penalty after 10 days inactivity (not 15)
+      if (daysInCycle >= 10 && userSubmission.completedChallenges < 10) {
         const missingGames = 10 - userSubmission.completedChallenges;
         finalPoints -= missingGames * 10;
-        finalPoints = Math.max(finalPoints, -29); // Minimum points protection
+        finalPoints = Math.max(finalPoints, 0); // no negative points
       }
 
       const newTier = calculateNewTier(user.tierRank, finalPoints);
 
-      // Reset points and challenges for the new cycle
+      // Reset cycle stats
       const resetPoints = 0;
       const resetChallenges = 0;
       const resetTargetsLeft = 10;
@@ -171,7 +258,7 @@ export const updateUserTier = async (userId) => {
           {
             $set: {
               tierRank: newTier,
-              totalPoints: resetPoints,
+              totalPoints: resetPoints, // reset active cycle points
               targetsLeft: resetTargetsLeft,
             },
           },
@@ -191,7 +278,6 @@ export const updateUserTier = async (userId) => {
         ),
       ]);
 
-      // Assign the result to return after the transaction
       result = {
         status: true,
         message: "Tier updated and points reset for new cycle",
@@ -203,12 +289,11 @@ export const updateUserTier = async (userId) => {
       };
     });
 
-    // Ensure result is returned
     if (!result) {
       throw new Error("Transaction failed: No result generated");
     }
 
-    return result; // Return the result after the transaction
+    return result;
   } catch (error) {
     console.error("Tier update failed:", error);
     throw error;
@@ -246,3 +331,76 @@ function calculateNewTier(currentTier, points) {
   // Default: no change
   return currentTier;
 }
+
+export const getProgressTracker = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const [userSubmission, user] = await Promise.all([
+      UserSubmission.findOne({ userId }),
+      User.findById(userId),
+    ]);
+
+    if (!userSubmission || !user) {
+      return res.status(404).json({
+        status: false,
+        message: "User data not found",
+      });
+    }
+
+    const completedChallenges = userSubmission.completedChallenges;
+    const currentScore = userSubmission.totalPoints;
+    const targetsLeft = 10 - completedChallenges;
+
+    // Combine and sort all submissions by submissionTime descending (recent first)
+    const combinedSubmissions = [
+      ...userSubmission.participatedTMCTargets.map((t) => ({
+        type: "TMC",
+        points: t.points,
+        submissionTime: t.submissionTime,
+      })),
+      ...userSubmission.participatedARVTargets.map((a) => ({
+        type: "ARV",
+        points: a.points,
+        submissionTime: a.submissionTime,
+      })),
+    ].sort((a, b) => b.submissionTime - a.submissionTime);
+
+    const recentSubmissions = combinedSubmissions.slice(0, completedChallenges);
+    const challengePoints = recentSubmissions.map((sub) => sub.points || 0);
+    const currentTier = tierTable.find((tier) => tier.name === user.tierRank);
+    const tierThresholds = currentTier
+      ? {
+          up: currentTier.up || null,
+          down: currentTier.down || null,
+          retainMin: currentTier.retain[0],
+          retainMax: currentTier.retain[currentTier.retain.length - 1],
+          image: currentTier.image,
+        }
+      : null;
+
+    const data = {
+      currentScore,
+      completedChallenges,
+      targetsLeft,
+      tierRank: user.tierRank,
+      nextTierPoint: user.nextTierPoint,
+      challengePoints,
+      tierThresholds,
+      graphConfig: {
+        yMin: -100,
+        yMax: 275,
+        xMax: 10,
+      },
+    };
+
+    return res.status(200).json({
+      status: true,
+      message: "Progress tracker data fetched successfully",
+      data,
+    });
+  } catch (error) {
+    console.error("getProgressTracker error:", error);
+    next(error);
+  }
+};

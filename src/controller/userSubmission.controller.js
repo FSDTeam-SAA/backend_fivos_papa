@@ -49,7 +49,118 @@ const cumulativeStdNormalProbability = (z) => {
 };
 
 // Check if user's tier should be updated and also renew the cycle
-export const checkTierUpdate = async (userId) => {
+// export const checkTierUpdate = async (userId, io) => {
+//   try {
+//     const userSubmission = await UserSubmission.findOne({ userId });
+//     if (!userSubmission) {
+//       return { status: false, message: "User submission not found" };
+//     }
+
+//     const gamesCompleted = userSubmission.completedChallenges;
+//     const cycleStartDate =
+//       userSubmission.lastChallengeDate || userSubmission.createdAt;
+//     const daysInCycle = Math.floor(
+//       (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
+//     );
+//     const shouldEndCycle = gamesCompleted >= 10 || daysInCycle >= 15;
+
+//     if (!shouldEndCycle) {
+//       return {
+//         status: true,
+//         message: "Cycle not yet complete",
+//         data: {
+//           gamesCompleted,
+//           daysInCycle,
+//           cycleComplete: false,
+//         },
+//       };
+//     }
+
+//     const updateResult = await updateUserTier(userId);
+
+//     if (!updateResult || !updateResult.previousPoints) {
+//       return {
+//         status: false,
+//         message: "Failed to update user tier. Missing data.",
+//       };
+//     }
+
+//     await emitNotification(io, {
+//       userId,
+//       message: `Your cycle has been renewed. Your previous total points ${updateResult.previousPoints}, your previous tier is ${updateResult.previousTier} and your new tier is ${updateResult.newTier}.`,
+//     });
+
+//     return {
+//       status: true,
+//       message: "Cycle completed. Points reset and new cycle started.",
+//       data: {
+//         ...updateResult,
+//         cycleComplete: true,
+//       },
+//     };
+//   } catch (error) {
+//     throw error;
+//   }
+// };
+
+// export const checkTierUpdate = async (userId, io) => {
+//   try {
+//     const userSubmission = await UserSubmission.findOne({ userId });
+//     if (!userSubmission) {
+//       return { status: false, message: "User submission not found" };
+//     }
+
+//     const gamesCompleted = userSubmission.completedChallenges;
+//     const cycleStartDate =
+//       userSubmission.lastChallengeDate || userSubmission.createdAt;
+//     const daysInCycle = Math.floor(
+//       (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
+//     );
+
+//     // End cycle if 10 games done OR 15 days passed
+//     const shouldEndCycle = gamesCompleted >= 10 || daysInCycle >= 15;
+
+//     if (!shouldEndCycle) {
+//       return {
+//         status: true,
+//         message: "Cycle not yet complete",
+//         data: {
+//           gamesCompleted,
+//           daysInCycle,
+//           cycleComplete: false,
+//         },
+//       };
+//     }
+
+//     const updateResult = await updateUserTier(userId);
+
+//     if (!updateResult || updateResult.previousPoints === undefined) {
+//       return {
+//         status: false,
+//         message: "Failed to update user tier. Missing data.",
+//       };
+//     }
+
+//     await emitNotification(io, {
+//       userId,
+//       message: `Your cycle has been renewed. You scored ${updateResult.previousPoints} points. Previous tier: ${updateResult.previousTier}, new tier: ${updateResult.newTier}.`,
+//     });
+
+//     return {
+//       status: true,
+//       message: "Cycle completed. Points reset and new cycle started.",
+//       data: {
+//         ...updateResult,
+//         cycleComplete: true,
+//       },
+//     };
+//   } catch (error) {
+//     throw error;
+//   }
+// };
+// Submit TMC game
+
+export const checkTierUpdate = async (userId, io) => {
   try {
     const userSubmission = await UserSubmission.findOne({ userId });
     if (!userSubmission) {
@@ -57,11 +168,38 @@ export const checkTierUpdate = async (userId) => {
     }
 
     const gamesCompleted = userSubmission.completedChallenges;
+
+    // Combine TMC and ARV submissions
+    const combinedSubmissions = [
+      ...userSubmission.participatedTMCTargets.map((t) => ({
+        submissionTime: t.submissionTime,
+      })),
+      ...userSubmission.participatedARVTargets.map((a) => ({
+        submissionTime: a.submissionTime,
+      })),
+    ];
+
+    // Sort by submissionTime ascending
+    combinedSubmissions.sort((a, b) => a.submissionTime - b.submissionTime);
+
+    const totalSubmissions = combinedSubmissions.length;
+
+    // Cycle start time is the submissionTime of the first in current cycle (position total - completedChallenges)
+    const cycleStartIndex =
+      totalSubmissions - userSubmission.completedChallenges;
     const cycleStartDate =
-      userSubmission.lastChallengeDate || userSubmission.createdAt;
+      cycleStartIndex >= 0
+        ? combinedSubmissions[cycleStartIndex].submissionTime
+        : userSubmission.createdAt;
+
+    const lastActivity = userSubmission.lastChallengeDate || cycleStartDate;
     const daysInCycle = Math.floor(
       (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
     );
+    const daysInactive = Math.floor(
+      (new Date() - lastActivity) / (1000 * 60 * 60 * 24)
+    );
+
     const shouldEndCycle = gamesCompleted >= 10 || daysInCycle >= 15;
 
     if (!shouldEndCycle) {
@@ -78,18 +216,16 @@ export const checkTierUpdate = async (userId) => {
 
     const updateResult = await updateUserTier(userId);
 
-    if (!updateResult || !updateResult.previousPoints) {
+    if (!updateResult || updateResult.previousPoints === undefined) {
       return {
         status: false,
         message: "Failed to update user tier. Missing data.",
       };
     }
 
-    const io = req.app.get("io");
-
     await emitNotification(io, {
       userId,
-      message: `Your cycle has been renewed. Your previous total points ${updateResult.previousPoints}, your previous tier is ${updateResult.previousTier} and your new tier is ${updateResult.newTier}.`,
+      message: `Your cycle has been renewed. You scored ${updateResult.previousPoints} points. Previous tier: ${updateResult.previousTier}, new tier: ${updateResult.newTier}.`,
     });
 
     return {
@@ -105,7 +241,6 @@ export const checkTierUpdate = async (userId) => {
   }
 };
 
-// Submit TMC game
 export const submitTMCGame = async (req, res, next) => {
   const { firstChoiceImage, secondChoiceImage, TMCTargetId } = req.body;
   const userId = req.user._id;
@@ -189,28 +324,16 @@ export const submitTMCGame = async (req, res, next) => {
       });
     }
 
-    // Calculate points based on choices
-    let points = 0;
-    if (TMC.targetImage === firstChoiceImage) {
-      points = 25;
-    } else if (TMC.targetImage === secondChoiceImage) {
-      points = 15;
-    } else {
-      points = -10;
-    }
-
-    // Update user submission
+    // Store choices without calculating points
     userSubmission.participatedTMCTargets.push({
       TMCId: TMCTargetId,
       firstChoiceImage,
       secondChoiceImage,
-      points,
+      points: null,
       submissionTime: currentTime,
     });
 
     userSubmission.completedChallenges += 1;
-    const possitivePoint = userSubmission.totalPoints + points;
-    userSubmission.totalPoints = possitivePoint > 0 ? possitivePoint : 0;
     userSubmission.lastChallengeDate = new Date();
 
     await userSubmission.save();
@@ -222,19 +345,15 @@ export const submitTMCGame = async (req, res, next) => {
     updatedUser.targetsLeft -= 1;
     await updatedUser.save();
 
-    // Check for tier update
-    const tierUpdate = await checkTierUpdate(userId);
-
     return res.status(200).json({
       status: true,
-      message: "TMC game submitted successfully",
-      points,
+      message:
+        "TMC game submitted successfully. Points will be awarded at reveal time.",
       currentTier: updatedUser.tierRank,
       totalPoints: updatedUser.totalPoints,
       targetsLeft: updatedUser.targetsLeft,
       nextTierPoint: updatedUser.nextTierPoint,
       gamesCompleted: userSubmission.completedChallenges,
-      tierUpdate,
     });
   } catch (error) {
     next(error);

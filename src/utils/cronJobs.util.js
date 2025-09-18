@@ -11,6 +11,7 @@ import {
 import { startNextGameFromCron } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
 import { GameQueue } from "../model/gameQueue.model.js";
+import { checkTierUpdate } from "./../controller/userSubmission.controller.js";
 
 const addMinutes = (start, minutes) => {
   if (!start || isNaN(start.getTime())) {
@@ -20,7 +21,7 @@ const addMinutes = (start, minutes) => {
 };
 
 const checkInactiveUsers = async (io) => {
-  const inactiveThreshold = 10 * 60 * 1000; // 10 minutes
+  const inactiveThreshold = 10 * 60 * 1000;
   try {
     const inactiveUsers = await User.find({
       lastActive: { $lt: new Date(Date.now() - inactiveThreshold) },
@@ -51,6 +52,73 @@ const checkInactiveUsers = async (io) => {
   } catch (error) {}
 };
 
+// const checkAllUsersForCycleRenewal = async (io) => {
+//   try {
+//     const userSubmissions = await UserSubmission.find({});
+//     for (const us of userSubmissions) {
+//       const cycleStartDate = us.lastChallengeDate || us.createdAt;
+//       const daysInCycle = Math.floor(
+//         (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
+//       );
+
+//       const daysInactive = Math.floor(
+//         (new Date() - us.lastChallengeDate) / (1000 * 60 * 60 * 24)
+//       );
+
+//       if (
+//         (daysInactive >= 10 && us.completedChallenges < 10) ||
+//         daysInCycle >= 15
+//       ) {
+//         await checkTierUpdate(us.userId, io);
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error in checkAllUsersForCycleRenewal:", error);
+//   }
+// };
+
+const checkAllUsersForCycleRenewal = async (io) => {
+  try {
+    const userSubmissions = await UserSubmission.find({});
+    for (const us of userSubmissions) {
+      const combinedSubmissions = [
+        ...us.participatedTMCTargets.map((t) => ({
+          submissionTime: t.submissionTime,
+        })),
+        ...us.participatedARVTargets.map((a) => ({
+          submissionTime: a.submissionTime,
+        })),
+      ];
+
+      combinedSubmissions.sort((a, b) => a.submissionTime - b.submissionTime);
+
+      const totalSubmissions = combinedSubmissions.length;
+      const cycleStartIndex = totalSubmissions - us.completedChallenges;
+      const cycleStartDate =
+        cycleStartIndex >= 0
+          ? combinedSubmissions[cycleStartIndex].submissionTime
+          : us.createdAt;
+
+      const lastActivity = us.lastChallengeDate || cycleStartDate;
+      const daysInCycle = Math.floor(
+        (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
+      );
+      const daysInactive = Math.floor(
+        (new Date() - lastActivity) / (1000 * 60 * 60 * 24)
+      );
+
+      if (
+        (daysInactive >= 10 && us.completedChallenges < 10) ||
+        daysInCycle >= 15
+      ) {
+        await checkTierUpdate(us.userId, io);
+      }
+    }
+  } catch (error) {
+    console.error("Error in checkAllUsersForCycleRenewal:", error);
+  }
+};
+
 const manageGameLifecycle = async (io, model, gameName) => {
   const now = new Date();
 
@@ -77,6 +145,10 @@ const manageGameLifecycle = async (io, model, gameName) => {
         revealNotified,
         outcomeNotified,
         bufferNotified,
+        targetImage,
+        gameDuration,
+        revealDuration,
+        bufferDuration,
       } = game;
 
       const baseTime = gameName === "TMC" ? startTime : gameTime;
@@ -162,16 +234,42 @@ const manageGameLifecycle = async (io, model, gameName) => {
 
           if (submissions.length > 0) {
             for (const submission of submissions) {
-              const entry = submission.participatedTMCTargets.find(
+              const entryIndex = submission.participatedTMCTargets.findIndex(
                 (e) => e.TMCId.toString() === _id.toString()
               );
-              if (entry) {
-                await emitNotification(io, {
-                  userId: submission.userId,
-                  targetCode: code,
-                  message: `Your TMC game ${code} has been revealed! You earned ${entry.points} points.`,
-                });
+              if (
+                entryIndex === -1 ||
+                submission.participatedTMCTargets[entryIndex].points !== null
+              )
+                continue;
+
+              const entry = submission.participatedTMCTargets[entryIndex];
+              let points = 0;
+              if (targetImage === entry.firstChoiceImage) {
+                points = 25;
+              } else if (targetImage === entry.secondChoiceImage) {
+                points = 15;
+              } else {
+                points = -10;
               }
+
+              const newTotal = submission.totalPoints + points;
+              submission.totalPoints = Math.max(0, newTotal);
+              entry.points = points;
+
+              await submission.save();
+
+              const user = await User.findById(submission.userId);
+              user.totalPoints = submission.totalPoints;
+              await user.save();
+
+              await checkTierUpdate(submission.userId, io);
+
+              await emitNotification(io, {
+                userId: submission.userId,
+                targetCode: code,
+                message: `Your TMC game ${code} has been revealed! You earned ${points} points.`,
+              });
             }
           }
         } else if (gameName === "ARV") {
@@ -402,6 +500,10 @@ const initCronJobs = (io) => {
   cron.schedule("*/10 * * * * *", () => {
     manageGameLifecycle(io, ARVTarget, "ARV");
     manageGameLifecycle(io, TMCTarget, "TMC");
+  });
+
+  cron.schedule("0 0 * * *", () => {
+    checkAllUsersForCycleRenewal(io);
   });
 };
 

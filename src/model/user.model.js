@@ -2,6 +2,89 @@ import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const tierTable = [
+  {
+    name: "NOVICE SEEKER",
+    up: 1,
+    down: undefined,
+    retain: [0],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.47_33b37d3e_auyufl.jpg",
+  },
+  {
+    name: "INITIATE",
+    up: 1,
+    down: -30,
+    retain: [-29, 0],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_61543db5_bmt0rp.jpg",
+  },
+  {
+    name: "APPRENTICE",
+    up: 31,
+    down: 0,
+    retain: [1, 30],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.46_09e5ccc2_inab8i.jpg",
+  },
+  {
+    name: "EXPLORER",
+    up: 61,
+    down: 0,
+    retain: [1, 60],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_10ad1961_cbyovm.jpg",
+  },
+  {
+    name: "VISIONARY",
+    up: 81,
+    down: 30,
+    retain: [31, 80],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_159602ec_izzy2x.jpg",
+  },
+  {
+    name: "ADEPT",
+    up: 101,
+    down: 30,
+    retain: [31, 100],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.46_d3b5090c_jkdgn5.jpg",
+  },
+  {
+    name: "SEER",
+    up: 121,
+    down: 60,
+    retain: [61, 120],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.47_872179ca_yjw7p8.jpg",
+  },
+  {
+    name: "ORACLE",
+    up: 141,
+    down: 60,
+    retain: [61, 140],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760774/Screenshot_2025-06-24_162548_sd6f7x.png",
+  },
+  {
+    name: "MASTER REMOTE VIEWER",
+    up: 161,
+    down: 100,
+    retain: [101, 160],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_9aa33538_wdmtfz.jpg",
+  },
+  {
+    name: "ASCENDING MASTER",
+    up: undefined,
+    down: 120,
+    retain: [121],
+    image:
+      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_35818ccb_he4t79.jpg",
+  },
+];
+
 const userSchema = new Schema(
   {
     email: {
@@ -161,23 +244,12 @@ userSchema.pre("validate", function (next) {
 // Middleware to calculate nextTierPoint based on points
 userSchema.pre("save", function (next) {
   const points = this.totalPoints;
-  const tierTable = [
-    { name: "NOVICE SEEKER", pointsRequired: 1 },
-    { name: "INITIATE", pointsRequired: 31 },
-    { name: "APPRENTICE", pointsRequired: 61 },
-    { name: "EXPLORER", pointsRequired: 81 },
-    { name: "VISIONARY", pointsRequired: 101 },
-    { name: "ADEPT", pointsRequired: 121 },
-    { name: "SEER", pointsRequired: 141 },
-    { name: "ORACLE", pointsRequired: 161 },
-    { name: "MASTER REMOTE VIEWER", pointsRequired: 181 },
-    { name: "ASCENDING MASTER", pointsRequired: null },
-  ];
 
   // Find current tier index
   let currentTierIndex = tierTable.findIndex(
     (tier) => tier.name === this.tierRank
   );
+
   if (currentTierIndex === -1) {
     console.warn(
       `Invalid tierRank: ${this.tierRank}, defaulting to NOVICE SEEKER`
@@ -185,41 +257,33 @@ userSchema.pre("save", function (next) {
     currentTierIndex = 0;
   }
 
-  // Get the next tier
+  const currentTier = tierTable[currentTierIndex];
+
+  // Validate totalPoints
+  if (typeof points !== "number" || isNaN(points)) {
+    console.error(`Invalid totalPoints value: ${points}`);
+    this.nextTierPoint = 0;
+    return next();
+  }
+
+  // Get next tier
   const nextTierIndex =
     currentTierIndex + 1 < tierTable.length
       ? currentTierIndex + 1
       : currentTierIndex;
   const nextTier = tierTable[nextTierIndex];
 
-  // Calculate nextTierPoint
+  // Calculate points needed for next tier
   let nextTierPoint;
-  if (nextTier.pointsRequired === null) {
-    nextTierPoint = 0; // No next tier (ASCENDING MASTER)
-  } else if (
-    typeof nextTier.pointsRequired !== "number" ||
-    typeof points !== "number"
-  ) {
-    console.error(
-      `Invalid points data: pointsRequired=${nextTier.pointsRequired}, points=${points}`
-    );
-    nextTierPoint = 0; // Fallback to 0 on error
+  if (!nextTier.up || typeof nextTier.up !== "number") {
+    nextTierPoint = 0;
   } else {
-    nextTierPoint = Math.max(nextTier.pointsRequired - points, 0);
+    nextTierPoint = Math.max(nextTier.up - points, 0);
   }
 
   this.nextTierPoint = nextTierPoint;
 
-  // Log for debugging
-  // console.log({
-  //   tierRank: this.tierRank,
-  //   totalPoints: points,
-  //   currentTierIndex,
-  //   nextTier: nextTier.name,
-  //   nextTierPointsRequired: nextTier.pointsRequired,
-  //   nextTierPoint,
-  //   gender: this.gender
-  // });
+  this.tierImage = currentTier.image;
 
   next();
 });

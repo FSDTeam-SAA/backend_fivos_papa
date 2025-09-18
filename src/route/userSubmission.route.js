@@ -17,6 +17,7 @@ import {
 import {
   updateUserTier,
   getNextUserTierInfo,
+  getProgressTracker,
 } from "../controller/tier.controller.js";
 
 const router = express.Router();
@@ -47,6 +48,7 @@ router.patch("/update-ARVAnalytics", verifyJWT, updateARVAnalytics);
 router.patch("/update-TMCAnalytics", verifyJWT, updateTMCAnalytics);
 router.post("/update-tier/:userId", verifyJWT, updateUserTier);
 router.get("/get-nextTierInfo/:userId", getNextUserTierInfo);
+router.get("/get-progressTracker/:userId", getProgressTracker);
 
 //graph
 router.get("/user-graph-data/:userId", verifyJWT, getARVTMCGraphData);
