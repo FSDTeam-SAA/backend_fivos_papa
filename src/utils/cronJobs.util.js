@@ -52,15 +52,65 @@ const checkInactiveUsers = async (io) => {
   } catch (error) {}
 };
 
+// const checkAllUsersForCycleRenewal = async (io) => {
+//   try {
+//     const userSubmissions = await UserSubmission.find({});
+//     for (const us of userSubmissions) {
+//       const cycleStartDate = us.lastChallengeDate || us.createdAt;
+//       const daysInCycle = Math.floor(
+//         (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
+//       );
+
+//       const daysInactive = Math.floor(
+//         (new Date() - us.lastChallengeDate) / (1000 * 60 * 60 * 24)
+//       );
+
+//       if (
+//         (daysInactive >= 10 && us.completedChallenges < 10) ||
+//         daysInCycle >= 15
+//       ) {
+//         await checkTierUpdate(us.userId, io);
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error in checkAllUsersForCycleRenewal:", error);
+//   }
+// };
+
 const checkAllUsersForCycleRenewal = async (io) => {
   try {
     const userSubmissions = await UserSubmission.find({});
     for (const us of userSubmissions) {
-      const cycleStartDate = us.lastChallengeDate || us.createdAt;
+      const combinedSubmissions = [
+        ...us.participatedTMCTargets.map((t) => ({
+          submissionTime: t.submissionTime,
+        })),
+        ...us.participatedARVTargets.map((a) => ({
+          submissionTime: a.submissionTime,
+        })),
+      ];
+
+      combinedSubmissions.sort((a, b) => a.submissionTime - b.submissionTime);
+
+      const totalSubmissions = combinedSubmissions.length;
+      const cycleStartIndex = totalSubmissions - us.completedChallenges;
+      const cycleStartDate =
+        cycleStartIndex >= 0
+          ? combinedSubmissions[cycleStartIndex].submissionTime
+          : us.createdAt;
+
+      const lastActivity = us.lastChallengeDate || cycleStartDate;
       const daysInCycle = Math.floor(
         (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
       );
-      if (daysInCycle >= 15) {
+      const daysInactive = Math.floor(
+        (new Date() - lastActivity) / (1000 * 60 * 60 * 24)
+      );
+
+      if (
+        (daysInactive >= 10 && us.completedChallenges < 10) ||
+        daysInCycle >= 15
+      ) {
         await checkTierUpdate(us.userId, io);
       }
     }
