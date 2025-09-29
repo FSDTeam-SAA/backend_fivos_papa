@@ -352,7 +352,7 @@ export const getProgressTracker = async (req, res, next) => {
     const currentScore = userSubmission.totalPoints;
     const targetsLeft = 10 - completedChallenges;
 
-    // Combine and sort all submissions by submissionTime descending (recent first)
+    // Combine and sort submissions
     const combinedSubmissions = [
       ...userSubmission.participatedTMCTargets.map((t) => ({
         type: "TMC",
@@ -368,14 +368,28 @@ export const getProgressTracker = async (req, res, next) => {
 
     const recentSubmissions = combinedSubmissions.slice(0, completedChallenges);
     const challengePoints = recentSubmissions.map((sub) => sub.points || 0);
-    const currentTier = tierTable.find((tier) => tier.name === user.tierRank);
+
+    // Current tier
+    const currentIndex = tierTable.findIndex(
+      (tier) => tier.name === user.tierRank
+    );
+    const currentTier = currentIndex >= 0 ? tierTable[currentIndex] : null;
+
+    // Next tier
+    const nextTier =
+      currentIndex >= 0 && currentIndex < tierTable.length - 1
+        ? tierTable[currentIndex + 1]
+        : null;
+
+    // Top tier (last element in table)
+    const topTier = tierTable[tierTable.length - 1];
+
     const tierThresholds = currentTier
       ? {
           up: currentTier.up || null,
           down: currentTier.down || null,
           retainMin: currentTier.retain[0],
           retainMax: currentTier.retain[currentTier.retain.length - 1],
-          image: currentTier.image,
         }
       : null;
 
@@ -387,6 +401,11 @@ export const getProgressTracker = async (req, res, next) => {
       nextTierPoint: user.nextTierPoint,
       challengePoints,
       tierThresholds,
+      tierImages: {
+        current: currentTier?.image || null,
+        next: nextTier?.image || null,
+        top: topTier?.image || null,
+      },
       graphConfig: {
         yMin: -100,
         yMax: 275,
@@ -404,3 +423,94 @@ export const getProgressTracker = async (req, res, next) => {
     next(error);
   }
 };
+
+// export const getProgressTracker = async (req, res, next) => {
+//   try {
+//     const { userId } = req.params;
+
+//     const [userSubmission, user] = await Promise.all([
+//       UserSubmission.findOne({ userId }),
+//       User.findById(userId),
+//     ]);
+
+//     if (!userSubmission || !user) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "User data not found",
+//       });
+//     }
+
+//     const completedChallenges = userSubmission.completedChallenges;
+//     const currentScore = userSubmission.totalPoints;
+//     const targetsLeft = 10 - completedChallenges;
+
+//     // Combine and sort submissions
+//     const combinedSubmissions = [
+//       ...userSubmission.participatedTMCTargets.map((t) => ({
+//         type: "TMC",
+//         points: t.points,
+//         submissionTime: t.submissionTime,
+//       })),
+//       ...userSubmission.participatedARVTargets.map((a) => ({
+//         type: "ARV",
+//         points: a.points,
+//         submissionTime: a.submissionTime,
+//       })),
+//     ].sort((a, b) => b.submissionTime - a.submissionTime);
+
+//     const recentSubmissions = combinedSubmissions.slice(0, completedChallenges);
+//     const challengePoints = recentSubmissions.map((sub) => sub.points || 0);
+
+//     // Find current tier index
+//     const currentIndex = tierTable.findIndex(
+//       (tier) => tier.name === user.tierRank
+//     );
+//     const currentTier = currentIndex >= 0 ? tierTable[currentIndex] : null;
+
+//     // Get next two tiers
+//     const nextTiers = tierTable.slice(currentIndex + 1, currentIndex + 3);
+
+//     const tierThresholds = currentTier
+//       ? {
+//           up: currentTier.up || null,
+//           down: currentTier.down || null,
+//           retainMin: currentTier.retain[0],
+//           retainMax: currentTier.retain[currentTier.retain.length - 1],
+//         }
+//       : null;
+
+//     const data = {
+//       currentScore,
+//       completedChallenges,
+//       targetsLeft,
+//       tierRank: user.tierRank,
+//       nextTierPoint: user.nextTierPoint,
+//       challengePoints,
+//       tierThresholds,
+//       tierImages: {
+//         current: {
+//           name: currentTier?.name || null,
+//           image: currentTier?.image || null,
+//         },
+//         next: nextTiers.map((tier) => ({
+//           name: tier.name,
+//           image: tier.image,
+//         })),
+//       },
+//       graphConfig: {
+//         yMin: -100,
+//         yMax: 275,
+//         xMax: 10,
+//       },
+//     };
+
+//     return res.status(200).json({
+//       status: true,
+//       message: "Progress tracker data fetched successfully",
+//       data,
+//     });
+//   } catch (error) {
+//     console.error("getProgressTracker error:", error);
+//     next(error);
+//   }
+// };
