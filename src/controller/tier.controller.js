@@ -433,30 +433,33 @@ export const getProgressTracker = async (req, res, next) => {
       User.findById(userId),
     ]);
 
-    if (!userSubmission || !user) {
+    if (!user) {
       return res.status(404).json({
         status: false,
-        message: "User data not found",
+        message: "User not found",
       });
     }
 
-    const completedChallenges = userSubmission.completedChallenges;
-    const currentScore = userSubmission.totalPoints;
+    // --- Default values if userSubmission does not exist ---
+    const completedChallenges = userSubmission?.completedChallenges || 0;
+    const currentScore = userSubmission?.totalPoints || user.totalPoints || 0;
     const targetsLeft = 10 - completedChallenges;
 
-    // Combine and sort submissions
-    const combinedSubmissions = [
-      ...userSubmission.participatedTMCTargets.map((t) => ({
-        type: "TMC",
-        points: t.points,
-        submissionTime: t.submissionTime,
-      })),
-      ...userSubmission.participatedARVTargets.map((a) => ({
-        type: "ARV",
-        points: a.points,
-        submissionTime: a.submissionTime,
-      })),
-    ].sort((a, b) => b.submissionTime - a.submissionTime);
+    // Combine and sort submissions (if exists)
+    const combinedSubmissions = userSubmission
+      ? [
+          ...userSubmission.participatedTMCTargets.map((t) => ({
+            type: "TMC",
+            points: t.points,
+            submissionTime: t.submissionTime,
+          })),
+          ...userSubmission.participatedARVTargets.map((a) => ({
+            type: "ARV",
+            points: a.points,
+            submissionTime: a.submissionTime,
+          })),
+        ].sort((a, b) => b.submissionTime - a.submissionTime)
+      : [];
 
     const recentSubmissions = combinedSubmissions.slice(0, completedChallenges);
     const challengePoints = recentSubmissions.map((sub) => sub.points || 0);
@@ -465,7 +468,7 @@ export const getProgressTracker = async (req, res, next) => {
     const currentIndex = tierTable.findIndex(
       (tier) => tier.name === user.tierRank
     );
-    const currentTier = currentIndex >= 0 ? tierTable[currentIndex] : null;
+    const currentTier = currentIndex >= 0 ? tierTable[currentIndex] : tierTable[0]; // fallback: NOVICE SEEKER
 
     // Get next two tiers
     const nextTiers = tierTable.slice(currentIndex + 1, currentIndex + 3);
@@ -484,7 +487,7 @@ export const getProgressTracker = async (req, res, next) => {
       completedChallenges,
       targetsLeft,
       tierRank: user.tierRank,
-      nextTierPoint: user.nextTierPoint,
+      nextTierPoint: user.nextTierPoint || currentTier.up || 0,
       challengePoints,
       tierThresholds,
       tierImages: {
