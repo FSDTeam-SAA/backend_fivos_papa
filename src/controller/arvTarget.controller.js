@@ -10,7 +10,10 @@ import {
   updateRemoveFromQueueService,
 } from "../services/ARVTMCServices/ARVTMCServices.js";
 import { generateCode } from "../utils/generateCode.js";
-import { markImageAsUsed } from "../controller/TMCTarget.controller.js";
+import {
+  markImageAsUnused,
+  markImageAsUsed,
+} from "../controller/TMCTarget.controller.js";
 import { Notification } from "../model/notification.model.js";
 import { UserSubmission } from "../model/userSubmission.model.js";
 import { GameQueue } from "../model/gameQueue.model.js";
@@ -94,6 +97,115 @@ export const createARVTarget = async (req, res, next) => {
       status: true,
       data: newARVTarget,
       message: "ARV Target created successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Update ARV Target
+export const updateARVTarget = async (req, res, next) => {
+  const { id } = req.params;
+  const {
+    eventName,
+    eventDescription,
+    gameTime,
+    revealTime,
+    outcomeTime,
+    image1,
+    image2,
+    image3,
+    controlImage,
+    status,
+  } = req.body;
+
+  try {
+    const arvTarget = await ARVTarget.findById(id);
+    if (!arvTarget) {
+      return res.status(404).json({
+        status: false,
+        message: "ARV Target not found",
+      });
+    }
+
+    // Validate times if provided
+    const now = new Date();
+    const gameTimeDate = gameTime ? new Date(gameTime) : arvTarget.gameTime;
+    const revealTimeDate = revealTime
+      ? new Date(revealTime)
+      : arvTarget.revealTime;
+    const outcomeTimeDate = outcomeTime
+      ? new Date(outcomeTime)
+      : arvTarget.outcomeTime;
+
+    if (gameTime && gameTimeDate <= now) {
+      return res.status(400).json({
+        status: false,
+        message: "Game time must be in the future",
+      });
+    }
+
+    if (!(gameTimeDate < revealTimeDate && revealTimeDate < outcomeTimeDate)) {
+      return res.status(400).json({
+        status: false,
+        message: "Times must be in order: gameTime < revealTime < outcomeTime",
+      });
+    }
+
+    // Update fields
+    arvTarget.eventName = eventName ?? arvTarget.eventName;
+    arvTarget.eventDescription = eventDescription ?? arvTarget.eventDescription;
+    arvTarget.gameTime = gameTimeDate;
+    arvTarget.revealTime = revealTimeDate;
+    arvTarget.outcomeTime = outcomeTimeDate;
+    arvTarget.image1 = image1 ?? arvTarget.image1;
+    arvTarget.image2 = image2 ?? arvTarget.image2;
+    arvTarget.image3 = image3 ?? arvTarget.image3;
+    arvTarget.controlImage = controlImage ?? arvTarget.controlImage;
+    arvTarget.status = status ?? arvTarget.status;
+
+    await arvTarget.save();
+
+    return res.status(200).json({
+      status: true,
+      data: arvTarget,
+      message: "ARV Target updated successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Delete ARV Target
+export const deleteARVTarget = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const arvTarget = await ARVTarget.findById(id);
+    if (!arvTarget) {
+      return res.status(404).json({
+        status: false,
+        message: "ARV Target not found",
+      });
+    }
+
+    // Remove references from queue
+    await GameQueue.updateOne(
+      { ARVTargets: arvTarget._id },
+      { $pull: { ARVTargets: arvTarget._id } }
+    );
+
+    // Mark images as unused (if required in your system)
+    await markImageAsUnused(arvTarget.image1);
+    await markImageAsUnused(arvTarget.image2);
+    await markImageAsUnused(arvTarget.image3);
+    await markImageAsUnused(arvTarget.controlImage);
+
+    await arvTarget.deleteOne();
+
+    return res.status(200).json({
+      status: true,
+      message: "ARV Target deleted successfully",
     });
   } catch (error) {
     next(error);
