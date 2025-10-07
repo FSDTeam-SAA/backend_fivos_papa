@@ -36,6 +36,31 @@ export const markImageAsUsed = async (image) => {
   );
 };
 
+export const markImageAsUnused = async (image) => {
+  const imageUrl = typeof image === "string" ? image : image?.url;
+
+  if (!imageUrl) return;
+
+  await CategoryImage.updateOne(
+    {
+      "subCategories.images.imageUrl": imageUrl,
+    },
+    {
+      $set: {
+        "subCategories.$[sub].images.$[img].isUsed": false,
+        "subCategories.$[sub].images.$[img].status": "available",
+        "subCategories.$[sub].images.$[img].usedAt": null,
+      },
+    },
+    {
+      arrayFilters: [
+        { "sub.images.imageUrl": imageUrl },
+        { "img.imageUrl": imageUrl },
+      ],
+    }
+  );
+};
+
 export const createTMCTarget = async (req, res, next) => {
   const {
     targetImage,

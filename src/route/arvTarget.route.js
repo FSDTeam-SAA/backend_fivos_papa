@@ -1,6 +1,8 @@
 import express from "express";
 import {
   createARVTarget,
+  updateARVTarget,
+  deleteARVTarget,
   getAllARVTargets,
   getAllQueuedARVTargets,
   getAllUnQueuedARVTargets,
@@ -27,6 +29,8 @@ router.get("/get-allARVTargets", getAllARVTargets);
 router.get("/get-allQueuedARVTargets", getAllQueuedARVTargets);
 router.get("/get-allUnQueuedARVTargets", getAllUnQueuedARVTargets);
 router.get("/get-activeARVTarget", getActiveARVTarget);
+router.patch("/update-ARVTarget/:id", updateARVTarget);
+router.delete("/delete-ARVTarget/:id", deleteARVTarget);
 router.patch("/update-ARVTarget-resultImage/:id", updateResultImage);
 router.patch("/update-ARVTarget-addToQueue/:id", updateAddToQueue);
 router.patch("/update-ARVTarget-removeFromQueue/:id", updateRemoveFromQueue);
