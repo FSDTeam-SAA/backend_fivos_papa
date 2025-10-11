@@ -440,12 +440,10 @@ export const getProgressTracker = async (req, res, next) => {
       });
     }
 
-    // --- Default values if userSubmission does not exist ---
     const completedChallenges = userSubmission?.completedChallenges || 0;
     const currentScore = userSubmission?.totalPoints || user.totalPoints || 0;
     const targetsLeft = 10 - completedChallenges;
 
-    // Combine and sort submissions (if exists)
     const combinedSubmissions = userSubmission
       ? [
           ...userSubmission.participatedTMCTargets.map((t) => ({
@@ -464,14 +462,15 @@ export const getProgressTracker = async (req, res, next) => {
     const recentSubmissions = combinedSubmissions.slice(0, completedChallenges);
     const challengePoints = recentSubmissions.map((sub) => sub.points || 0);
 
-    // Find current tier index
     const currentIndex = tierTable.findIndex(
       (tier) => tier.name === user.tierRank
     );
-    const currentTier = currentIndex >= 0 ? tierTable[currentIndex] : tierTable[0]; // fallback: NOVICE SEEKER
 
-    // Get next two tiers
-    const nextTiers = tierTable.slice(currentIndex + 1, currentIndex + 3);
+    const currentTier =
+      currentIndex >= 0 ? tierTable[currentIndex] : tierTable[0];
+    const previousTier = currentIndex > 0 ? tierTable[currentIndex - 1] : null;
+    const nextTier =
+      currentIndex < tierTable.length - 1 ? tierTable[currentIndex + 1] : null;
 
     const tierThresholds = currentTier
       ? {
@@ -491,14 +490,14 @@ export const getProgressTracker = async (req, res, next) => {
       challengePoints,
       tierThresholds,
       tierImages: {
+        previous: previousTier
+          ? { name: previousTier.name, image: previousTier.image }
+          : null,
         current: {
           name: currentTier?.name || null,
           image: currentTier?.image || null,
         },
-        next: nextTiers.map((tier) => ({
-          name: tier.name,
-          image: tier.image,
-        })),
+        next: nextTier ? { name: nextTier.name, image: nextTier.image } : null,
       },
       graphConfig: {
         yMin: -100,
