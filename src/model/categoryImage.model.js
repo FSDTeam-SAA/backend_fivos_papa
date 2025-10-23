@@ -20,7 +20,7 @@ const categoryImageSchema = new Schema({
           },
           status: {
             type: String,
-            enum: ["unused", "used", "reserved"],
+            enum: ["unused", "used", "reserved","available"],
             default: "unused",
           },
           usedAt: {
