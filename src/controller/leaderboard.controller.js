@@ -314,14 +314,11 @@ import { UserSubmission } from "../model/userSubmission.model.js";
 //   }
 // };
 
+// Update to getARVLeaderboard
 export const getTMCLeaderboard = async (_, res, next) => {
   try {
     const leaderboard = await UserSubmission.aggregate([
-      {
-        $match: {
-          userId: { $exists: true },
-        },
-      },
+      { $match: { userId: { $exists: true } } },
       {
         $project: {
           userId: 1,
@@ -339,7 +336,7 @@ export const getTMCLeaderboard = async (_, res, next) => {
             $concatArrays: [
               {
                 $map: {
-                  input: "$participatedTMCTargets",
+                  input: { $ifNull: ["$participatedTMCTargets", []] },
                   as: "t",
                   in: {
                     type: "TMC",
@@ -350,7 +347,7 @@ export const getTMCLeaderboard = async (_, res, next) => {
               },
               {
                 $map: {
-                  input: "$participatedARVTargets",
+                  input: { $ifNull: ["$participatedARVTargets", []] },
                   as: "a",
                   in: {
                     type: "ARV",
@@ -382,7 +379,11 @@ export const getTMCLeaderboard = async (_, res, next) => {
           userId: 1,
           tierRank: 1,
           recentSubmissions: {
-            $slice: ["$sortedSubmissions", 0, "$completedChallenges"],
+            $slice: [
+              "$sortedSubmissions",
+              0,
+              { $max: ["$completedChallenges", 1] },
+            ],
           },
         },
       },
@@ -425,136 +426,15 @@ export const getTMCLeaderboard = async (_, res, next) => {
       },
     ]);
 
-    return res.status(200).json({
-      status: true,
-      message: "TMC Leaderboard fetched successfully",
-      data: leaderboard,
-    });
+    return res
+      .status(200)
+      .json({
+        status: true,
+        message: "TMC Leaderboard fetched successfully",
+        data: leaderboard,
+      });
   } catch (error) {
     console.error("TMC Leaderboard error:", error);
-    next(error);
-  }
-};
-
-// Update to getARVLeaderboard
-export const getARVLeaderboard = async (_, res, next) => {
-  try {
-    const leaderboard = await UserSubmission.aggregate([
-      {
-        $match: {
-          userId: { $exists: true },
-        },
-      },
-      {
-        $project: {
-          userId: 1,
-          tierRank: 1,
-          completedChallenges: 1,
-          participatedTMCTargets: 1,
-          participatedARVTargets: 1,
-        },
-      },
-      {
-        $project: {
-          userId: 1,
-          tierRank: 1,
-          combinedSubmissions: {
-            $concatArrays: [
-              {
-                $map: {
-                  input: "$participatedTMCTargets",
-                  as: "t",
-                  in: {
-                    type: "TMC",
-                    points: "$$t.points",
-                    submissionTime: "$$t.submissionTime",
-                  },
-                },
-              },
-              {
-                $map: {
-                  input: "$participatedARVTargets",
-                  as: "a",
-                  in: {
-                    type: "ARV",
-                    points: "$$a.points",
-                    submissionTime: "$$a.submissionTime",
-                  },
-                },
-              },
-            ],
-          },
-          completedChallenges: 1,
-        },
-      },
-      {
-        $project: {
-          userId: 1,
-          tierRank: 1,
-          sortedSubmissions: {
-            $sortArray: {
-              input: "$combinedSubmissions",
-              sortBy: { submissionTime: -1 },
-            },
-          },
-          completedChallenges: 1,
-        },
-      },
-      {
-        $project: {
-          userId: 1,
-          tierRank: 1,
-          recentSubmissions: {
-            $slice: ["$sortedSubmissions", 0, "$completedChallenges"],
-          },
-        },
-      },
-      {
-        $project: {
-          userId: 1,
-          tierRank: 1,
-          totalARVPoints: {
-            $sum: {
-              $map: {
-                input: "$recentSubmissions",
-                as: "sub",
-                in: {
-                  $cond: [{ $eq: ["$$sub.type", "ARV"] }, "$$sub.points", 0],
-                },
-              },
-            },
-          },
-        },
-      },
-      { $sort: { totalARVPoints: -1 } },
-      {
-        $lookup: {
-          from: "users",
-          localField: "userId",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
-      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          totalARVPoints: 1,
-          tierRank: 1,
-          user: {
-            screenName: { $ifNull: ["$user.screenName", "Unknown"] },
-            fullName: { $ifNull: ["$user.fullName", "Unknown"] },
-          },
-        },
-      },
-    ]);
-
-    return res.status(200).json({
-      status: true,
-      message: "ARV Leaderboard fetched successfully",
-      data: leaderboard,
-    });
-  } catch (error) {
-    console.error("ARV Leaderboard error:", error);
     next(error);
   }
 };
@@ -604,6 +484,128 @@ export const getTotalLeaderboard = async (_, res, next) => {
     });
   } catch (error) {
     console.error("Total Leaderboard error:", error);
+    next(error);
+  }
+};
+
+export const getARVLeaderboard = async (_, res, next) => {
+  try {
+    const leaderboard = await UserSubmission.aggregate([
+      { $match: { userId: { $exists: true } } },
+      {
+        $project: {
+          userId: 1,
+          tierRank: 1,
+          completedChallenges: 1,
+          participatedTMCTargets: 1,
+          participatedARVTargets: 1,
+        },
+      },
+      {
+        $project: {
+          userId: 1,
+          tierRank: 1,
+          combinedSubmissions: {
+            $concatArrays: [
+              {
+                $map: {
+                  input: { $ifNull: ["$participatedTMCTargets", []] },
+                  as: "t",
+                  in: {
+                    type: "TMC",
+                    points: "$$t.points",
+                    submissionTime: "$$t.submissionTime",
+                  },
+                },
+              },
+              {
+                $map: {
+                  input: { $ifNull: ["$participatedARVTargets", []] },
+                  as: "a",
+                  in: {
+                    type: "ARV",
+                    points: "$$a.points",
+                    submissionTime: "$$a.submissionTime",
+                  },
+                },
+              },
+            ],
+          },
+          completedChallenges: 1,
+        },
+      },
+      {
+        $project: {
+          userId: 1,
+          tierRank: 1,
+          sortedSubmissions: {
+            $sortArray: {
+              input: "$combinedSubmissions",
+              sortBy: { submissionTime: -1 },
+            },
+          },
+          completedChallenges: 1,
+        },
+      },
+      {
+        $project: {
+          userId: 1,
+          tierRank: 1,
+          recentSubmissions: {
+            $slice: [
+              "$sortedSubmissions",
+              0,
+              { $max: ["$completedChallenges", 1] },
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          userId: 1,
+          tierRank: 1,
+          totalARVPoints: {
+            $sum: {
+              $map: {
+                input: "$recentSubmissions",
+                as: "sub",
+                in: {
+                  $cond: [{ $eq: ["$$sub.type", "ARV"] }, "$$sub.points", 0],
+                },
+              },
+            },
+          },
+        },
+      },
+      { $sort: { totalARVPoints: -1 } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          totalARVPoints: 1,
+          tierRank: 1,
+          user: {
+            screenName: { $ifNull: ["$user.screenName", "Unknown"] },
+            fullName: { $ifNull: ["$user.fullName", "Unknown"] },
+          },
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      status: true,
+      message: "ARV Leaderboard fetched successfully",
+      data: leaderboard,
+    });
+  } catch (error) {
+    console.error("ARV Leaderboard error:", error);
     next(error);
   }
 };
