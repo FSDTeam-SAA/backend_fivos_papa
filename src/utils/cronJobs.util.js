@@ -101,10 +101,10 @@ const checkAllUsersForCycleRenewal = async (io) => {
 
       const lastActivity = us.lastChallengeDate || cycleStartDate;
       const daysInCycle = Math.floor(
-        (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
+        (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24),
       );
       const daysInactive = Math.floor(
-        (new Date() - lastActivity) / (1000 * 60 * 60 * 24)
+        (new Date() - lastActivity) / (1000 * 60 * 60 * 24),
       );
 
       if (
@@ -170,15 +170,15 @@ const manageGameLifecycle = async (io, model, gameName) => {
           {
             $push: { [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: _id },
           },
-          { upsert: true }
+          { upsert: true },
         );
 
         await Notification.deleteMany({ targetCode: code });
         await emitGlobalNotification(io, {
           message:
             gameName === "ARV"
-              ? `The ARV game ${code} is now expired! wait for the result.`
-              : `${gameName} game ${code} has expired (forced).`,
+              ? `The ARV game with target code ${code} has now ended! Wait for the result.`
+              : `The ${gameName} game with target code ${code} has now ended.`,
           targetCode: code,
         });
 
@@ -186,7 +186,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           model,
           io,
           console.error,
-          gameName
+          gameName,
         );
         if (nextGame) {
           await emitGlobalNotification(io, {
@@ -235,7 +235,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           if (submissions.length > 0) {
             for (const submission of submissions) {
               const entryIndex = submission.participatedTMCTargets.findIndex(
-                (e) => e.TMCId.toString() === _id.toString()
+                (e) => e.TMCId.toString() === _id.toString(),
               );
               if (
                 entryIndex === -1 ||
@@ -265,10 +265,17 @@ const manageGameLifecycle = async (io, model, gameName) => {
 
               await checkTierUpdate(submission.userId, io);
 
+              let message;
+              if (points > 0) {
+                message = `Your TMC game ${code} has been revealed! You earned ${points} points.`;
+              } else {
+                message = `Your TMC game ${code} has been revealed! You lost ${Math.abs(points)} points.`;
+              }
+
               await emitNotification(io, {
                 userId: submission.userId,
                 targetCode: code,
-                message: `Your TMC game ${code} has been revealed! You earned ${points} points.`,
+                message,
               });
             }
           }
@@ -280,7 +287,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           if (submissions.length > 0) {
             for (const submission of submissions) {
               const entry = submission.participatedARVTargets.find(
-                (e) => e.ARVId.toString() === _id.toString()
+                (e) => e.ARVId.toString() === _id.toString(),
               );
               if (entry) {
                 await emitNotification(io, {
@@ -314,7 +321,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
         if (submissions.length > 0) {
           for (const submission of submissions) {
             const entry = submission.participatedARVTargets.find(
-              (e) => e.ARVId.toString() === _id.toString()
+              (e) => e.ARVId.toString() === _id.toString(),
             );
             if (entry) {
               await emitNotification(io, {
@@ -350,7 +357,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           {
             $push: { [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: _id },
           },
-          { upsert: true }
+          { upsert: true },
         );
 
         await Notification.deleteMany({ targetCode: code });
@@ -358,8 +365,8 @@ const manageGameLifecycle = async (io, model, gameName) => {
         await emitGlobalNotification(io, {
           message:
             gameName === "ARV"
-              ? `The ARV game ${code} is now expired! wait for the result.`
-              : `${gameName} game ${code} has expired.`,
+              ? `The ARV game with target code ${code} has now ended! Wait for the result.`
+              : `The ${gameName} game with target code ${code} has now ended.`,
           targetCode: code,
         });
 
@@ -367,7 +374,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           model,
           io,
           console.error,
-          gameName
+          gameName,
         );
         if (nextGame) {
           await emitGlobalNotification(io, {
@@ -401,7 +408,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           model,
           io,
           console.error,
-          gameName
+          gameName,
         );
         if (nextGame) {
           await emitGlobalNotification(io, {
@@ -430,7 +437,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           const revealEnd = baseTime
             ? addMinutes(
                 new Date(baseTime),
-                game.gameDuration + game.revealDuration
+                game.gameDuration + game.revealDuration,
               )
             : null;
           outcomeEnd =
@@ -456,7 +463,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
                 [gameName === "TMC" ? "TMCTargets" : "ARVTargets"]: game._id,
               },
             },
-            { upsert: true }
+            { upsert: true },
           );
 
           await Notification.deleteMany({ targetCode: game.code });
@@ -464,8 +471,8 @@ const manageGameLifecycle = async (io, model, gameName) => {
           await emitGlobalNotification(io, {
             message:
               gameName === "ARV"
-                ? `The ARV game ${game.code} is now expired! wait for the result.`
-                : `${gameName} game ${game.code} has expired (forced).`,
+                ? `The ARV game with target code ${game.code} has now ended! Wait for the result.`
+                : ` The ${gameName} game with target code ${game.code} has now ended.`,
             targetCode: game.code,
           });
         }
@@ -477,7 +484,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
           model,
           io,
           console.error,
-          gameName
+          gameName,
         );
         if (nextGame) {
           await emitGlobalNotification(io, {

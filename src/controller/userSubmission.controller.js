@@ -194,10 +194,10 @@ export const checkTierUpdate = async (userId, io) => {
 
     const lastActivity = userSubmission.lastChallengeDate || cycleStartDate;
     const daysInCycle = Math.floor(
-      (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24)
+      (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24),
     );
     const daysInactive = Math.floor(
-      (new Date() - lastActivity) / (1000 * 60 * 60 * 24)
+      (new Date() - lastActivity) / (1000 * 60 * 60 * 24),
     );
 
     const shouldEndCycle = gamesCompleted >= 10 || daysInCycle >= 15;
@@ -225,7 +225,7 @@ export const checkTierUpdate = async (userId, io) => {
 
     await emitNotification(io, {
       userId,
-      message: `Your cycle has been renewed. You scored ${updateResult.previousPoints} points. Previous tier: ${updateResult.previousTier}, new tier: ${updateResult.newTier}.`,
+      message: `Your last cycle has ended. You scored ${updateResult.previousPoints} points. Previous tier: ${updateResult.previousTier}, New tier: ${updateResult.newTier}. A new cycle is now active.`,
     });
 
     return {
@@ -264,7 +264,7 @@ export const submitTMCGame = async (req, res, next) => {
 
     // Find the TMC target
     const TMC = await TMCTarget.findById(TMCTargetId).select(
-      "status startTime revealTime targetImage"
+      "status startTime revealTime targetImage",
     );
     if (!TMC) {
       return res
@@ -314,7 +314,7 @@ export const submitTMCGame = async (req, res, next) => {
 
     // Prevent duplicate submission
     const alreadySubmitted = userSubmission.participatedTMCTargets.some(
-      (entry) => entry.TMCId.toString() === TMCTargetId
+      (entry) => entry.TMCId.toString() === TMCTargetId,
     );
 
     if (alreadySubmitted) {
@@ -384,7 +384,7 @@ export const submitARVGame = async (req, res, next) => {
 
     // Find the ARV target
     const ARV = await ARVTarget.findById(ARVTargetId).select(
-      "status gameTime revealTime outcomeTime"
+      "status gameTime revealTime outcomeTime",
     );
     if (!ARV) {
       return res
@@ -432,7 +432,7 @@ export const submitARVGame = async (req, res, next) => {
 
     // Prevent duplicate submission
     const alreadySubmitted = userSubmission.participatedARVTargets.some(
-      (entry) => entry.ARVId.toString() === ARVTargetId
+      (entry) => entry.ARVId.toString() === ARVTargetId,
     );
 
     if (alreadySubmitted) {
@@ -522,12 +522,12 @@ export const getCompletedTargetsCount = async (req, res, next) => {
 
     // Count successful TMC targets where points > 0
     const successfulTMCTargets = userSubmission.participatedTMCTargets.filter(
-      (target) => target.points > 0
+      (target) => target.points > 0,
     ).length;
 
     // Count successful ARV targets where points > 0
     const successfulARVTargets = userSubmission.participatedARVTargets.filter(
-      (target) => target.points > 0
+      (target) => target.points > 0,
     ).length;
 
     const totalCompletedTargets =
@@ -572,7 +572,7 @@ export const getPreviousTMCResults = async (req, res) => {
     }
 
     const previousTMCResults = userSubmission.participatedTMCTargets.filter(
-      (target) => target.TMCId.toString() !== currentTMCTargetId
+      (target) => target.TMCId.toString() !== currentTMCTargetId,
     );
 
     return res.status(200).json({
@@ -599,7 +599,7 @@ export const getPreviousARVResults = async (req, res) => {
     }
 
     const previousARVResults = userSubmission.participatedARVTargets.filter(
-      (target) => target.ARVId.toString() !== currentARVTargetId
+      (target) => target.ARVId.toString() !== currentARVTargetId,
     );
 
     return res.status(200).json({
@@ -620,7 +620,7 @@ export const getTMCTargetResult = async (req, res, next) => {
   try {
     const result = await UserSubmission.findOne(
       { userId, "participatedTMCTargets.TMCId": TMCTargetId },
-      { participatedTMCTargets: 1, _id: 0 }
+      { participatedTMCTargets: 1, _id: 0 },
     );
 
     if (!result || !result.participatedTMCTargets.length) {
@@ -632,7 +632,7 @@ export const getTMCTargetResult = async (req, res, next) => {
 
     // ✅ Find the exact TMC entry from array that matches the given TMCTargetId
     const targetResult = result.participatedTMCTargets.find(
-      (entry) => entry.TMCId.toString() === TMCTargetId
+      (entry) => entry.TMCId.toString() === TMCTargetId,
     );
 
     if (!targetResult) {
@@ -664,7 +664,7 @@ export const getARVTargetResult = async (req, res, next) => {
         userId,
         "participatedARVTargets.ARVId": ARVTargetId,
       },
-      { participatedARVTargets: 1, _id: 0 }
+      { participatedARVTargets: 1, _id: 0 },
     );
 
     if (!userSubmission) {
@@ -687,7 +687,7 @@ export const getARVTargetResult = async (req, res, next) => {
     }
 
     const participatedTarget = userSubmission.participatedARVTargets.find(
-      (target) => target.ARVId.toString() === ARVTargetId
+      (target) => target.ARVId.toString() === ARVTargetId,
     );
 
     return res.status(200).json({
@@ -722,7 +722,7 @@ export const updateARVTargetPoints = async (req, res, next) => {
         userId,
         "participatedARVTargets.ARVId": ARVTargetId,
       },
-      { "participatedARVTargets.$": 1, _id: 0 }
+      { "participatedARVTargets.$": 1, _id: 0 },
     );
 
     const length = result.participatedARVTargets.length;
@@ -739,7 +739,7 @@ export const updateARVTargetPoints = async (req, res, next) => {
         $set: { "participatedARVTargets.$.points": points },
         $inc: { totalPoints: points },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!userSubmission) {
@@ -917,10 +917,10 @@ export const getARVTMCGraphData = async (req, res, next) => {
 
     // Convert data to map for easy lookup
     const tmcMap = Object.fromEntries(
-      tmcData.map((item) => [item._id.month, item.count])
+      tmcData.map((item) => [item._id.month, item.count]),
     );
     const arvMap = Object.fromEntries(
-      arvData.map((item) => [item._id.month, item.count])
+      arvData.map((item) => [item._id.month, item.count]),
     );
 
     // Build final data for all 12 months
@@ -1017,7 +1017,7 @@ export const getUserParticipationTMC = async (req, res, next) => {
   try {
     const result = await UserSubmission.findOne(
       { userId, "participatedTMCTargets.TMCId": TMCTargetId },
-      { "participatedTMCTargets.$": 1 }
+      { "participatedTMCTargets.$": 1 },
     ).populate("participatedTMCTargets.TMCId");
 
     if (!result) {
@@ -1045,7 +1045,7 @@ export const getUserParticipationARV = async (req, res, next) => {
   try {
     const result = await UserSubmission.findOne(
       { userId, "participatedARVTargets.ARVId": ARVTargetId },
-      { "participatedARVTargets.$": 1 }
+      { "participatedARVTargets.$": 1 },
     ).populate("participatedARVTargets.ARVId");
 
     if (!result) {

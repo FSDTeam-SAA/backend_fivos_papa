@@ -85,7 +85,7 @@ export const createARVTarget = async (req, res, next) => {
         $push: { ARVTargets: newARVTarget._id },
         $set: { isARVQueueActive: true },
       },
-      { upsert: true }
+      { upsert: true },
     );
 
     await markImageAsUsed(image1);
@@ -192,7 +192,7 @@ export const deleteARVTarget = async (req, res, next) => {
     // Remove references from queue
     await GameQueue.updateOne(
       { ARVTargets: arvTarget._id },
-      { $pull: { ARVTargets: arvTarget._id } }
+      { $pull: { ARVTargets: arvTarget._id } },
     );
 
     // Mark images as unused (if required in your system)
@@ -395,7 +395,7 @@ export const updateResultImage = async (req, res, next) => {
         resultImage,
         isResultRevealed: true,
       },
-      { new: true }
+      { new: true },
     );
 
     const io = req.app.get("io");
@@ -413,7 +413,7 @@ export const updateResultImage = async (req, res, next) => {
 
     for (const submission of submissions) {
       const target = submission.participatedARVTargets.find(
-        (entry) => entry.ARVId.toString() === id.toString()
+        (entry) => entry.ARVId.toString() === id.toString(),
       );
 
       if (!target) continue;
@@ -450,17 +450,27 @@ export const updateResultImage = async (req, res, next) => {
       const userId = submission.userId._id;
       // const points = target?.points || 0;
 
+      // Determine message based on points
+      let message;
+      if (points >= 0) {
+        message = `Results have been published for game with target code ${game.code}. You earned ${points} points.`;
+      } else {
+        message = `Results have been published for game with target code ${game.code}. You lost ${Math.abs(points)} points.`;
+      }
+
       // Emit to user
       io.to(`user_${userId}`).emit("notification", {
-        message: `Result is published for game ${game.code}. You earned ${points} points.`,
+        message,
         targetCode: game.code,
+        points: points,
       });
 
       // Save to DB
       await Notification.create({
         userId,
-        message: `Result image published for game ${game.code}. You earned ${points} points.`,
+        message,
         targetCode: game.code,
+        points: points,
       });
     }
 

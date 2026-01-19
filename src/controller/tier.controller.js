@@ -9,7 +9,7 @@ const tierTable = [
     down: undefined,
     retain: [0],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.47_33b37d3e_auyufl.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817170/Novice_qo2vkf.png",
   },
   {
     name: "INITIATE",
@@ -17,7 +17,7 @@ const tierTable = [
     down: -30,
     retain: [-29, 0],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_61543db5_bmt0rp.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817170/Initiate_h47rzj.png",
   },
   {
     name: "APPRENTICE",
@@ -25,7 +25,7 @@ const tierTable = [
     down: 0,
     retain: [1, 30],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.46_09e5ccc2_inab8i.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817170/Apprentice_r4iqju.png",
   },
   {
     name: "EXPLORER",
@@ -33,7 +33,7 @@ const tierTable = [
     down: 0,
     retain: [1, 60],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_10ad1961_cbyovm.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817170/Explorer_co0vqx.png",
   },
   {
     name: "VISIONARY",
@@ -41,7 +41,7 @@ const tierTable = [
     down: 30,
     retain: [31, 80],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_159602ec_izzy2x.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817169/Visionary_eowvuz.png",
   },
   {
     name: "ADEPT",
@@ -49,7 +49,7 @@ const tierTable = [
     down: 30,
     retain: [31, 100],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.46_d3b5090c_jkdgn5.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817169/Adept_arjrue.png",
   },
   {
     name: "SEER",
@@ -57,7 +57,7 @@ const tierTable = [
     down: 60,
     retain: [61, 120],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760278/WhatsApp_Image_2025-06-24_at_13.55.47_872179ca_yjw7p8.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817169/Seer_lova5e.png",
   },
   {
     name: "ORACLE",
@@ -65,7 +65,7 @@ const tierTable = [
     down: 60,
     retain: [61, 140],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760774/Screenshot_2025-06-24_162548_sd6f7x.png",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817168/Oracle_ceju2r.png",
   },
   {
     name: "MASTER REMOTE VIEWER",
@@ -73,7 +73,7 @@ const tierTable = [
     down: 100,
     retain: [101, 160],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_9aa33538_wdmtfz.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817169/Master_sk9p6h.png",
   },
   {
     name: "ASCENDING MASTER",
@@ -81,7 +81,7 @@ const tierTable = [
     down: 120,
     retain: [121],
     image:
-      "https://res.cloudinary.com/dbc8cfqkw/image/upload/v1750760279/WhatsApp_Image_2025-06-24_at_13.55.47_35818ccb_he4t79.jpg",
+      "https://res.cloudinary.com/dgza9pfm9/image/upload/v1768817169/Assending_grptyk.png",
   },
 ];
 
@@ -96,7 +96,7 @@ export const getNextUserTierInfo = async (req, res, next) => {
 
     const currentPoints = user.totalPoints;
     const currentIndex = tierTable.findIndex(
-      (tier) => tier.name === user.tierRank
+      (tier) => tier.name === user.tierRank,
     );
     if (currentIndex === -1) {
       return res
@@ -235,7 +235,7 @@ export const updateUserTier = async (userId) => {
       const daysInCycle = Math.floor(
         (new Date() -
           (userSubmission.lastChallengeDate || userSubmission.createdAt)) /
-          (1000 * 60 * 60 * 24)
+          (1000 * 60 * 60 * 24),
       );
 
       // Apply penalty after 10 days inactivity (not 15)
@@ -262,7 +262,7 @@ export const updateUserTier = async (userId) => {
               targetsLeft: resetTargetsLeft,
             },
           },
-          { session }
+          { session },
         ),
         UserSubmission.updateOne(
           { userId },
@@ -274,7 +274,7 @@ export const updateUserTier = async (userId) => {
               lastChallengeDate: new Date(),
             },
           },
-          { session }
+          { session },
         ),
       ]);
 
@@ -463,7 +463,7 @@ export const getProgressTracker = async (req, res, next) => {
     const challengePoints = recentSubmissions.map((sub) => sub.points || 0);
 
     const currentIndex = tierTable.findIndex(
-      (tier) => tier.name === user.tierRank
+      (tier) => tier.name === user.tierRank,
     );
 
     const currentTier =
