@@ -28,7 +28,7 @@ export const sendOTP = async (email, otp) => {
     email,
     "Password Reset OTP",
     `Your OTP is: ${otp}`,
-    `<p>Your OTP is: <strong>${otp}</strong></p>`
+    `<p>Your OTP is: <strong>${otp}</strong></p>`,
   );
 };
 
@@ -40,7 +40,7 @@ export const sendContactReply = async (email, name, replyMessage) => {
     `<p>Dear ${name},</p>
      <p>Thank you for contacting us. Here is our response:</p>
      <p>${replyMessage}</p>
-     <p>Best regards,<br/>The Support Team</p>`
+     <p>Best regards,<br/>The Support Team</p>`,
   );
 };
 
