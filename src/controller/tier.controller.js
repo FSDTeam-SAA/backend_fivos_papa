@@ -238,11 +238,11 @@ export const updateUserTier = async (userId) => {
           (1000 * 60 * 60 * 24),
       );
 
-      // Apply penalty after 10 days inactivity (not 15)
-      if (daysInCycle >= 10 && userSubmission.completedChallenges < 10) {
+      // Apply incomplete-cycle penalty only when the 15-day cycle window ends.
+      if (daysInCycle >= 15 && userSubmission.completedChallenges < 10) {
         const missingGames = 10 - userSubmission.completedChallenges;
         finalPoints -= missingGames * 10;
-        finalPoints = Math.max(finalPoints, 0); // no negative points
+        finalPoints = Math.max(finalPoints, -29); // keep lower bound for tier logic
       }
 
       const newTier = calculateNewTier(user.tierRank, finalPoints);
@@ -441,7 +441,10 @@ export const getProgressTracker = async (req, res, next) => {
     }
 
     const completedChallenges = userSubmission?.completedChallenges || 0;
-    const currentScore = userSubmission?.totalPoints || user.totalPoints || 0;
+    const currentScore = Math.max(
+      0,
+      userSubmission?.totalPoints || user.totalPoints || 0,
+    );
     const targetsLeft = 10 - completedChallenges;
 
     const combinedSubmissions = userSubmission
@@ -460,7 +463,9 @@ export const getProgressTracker = async (req, res, next) => {
       : [];
 
     const recentSubmissions = combinedSubmissions.slice(0, completedChallenges);
-    const challengePoints = recentSubmissions.map((sub) => sub.points || 0);
+    const challengePoints = recentSubmissions.map((sub) =>
+      Math.max(0, sub.points || 0),
+    );
 
     const currentIndex = tierTable.findIndex(
       (tier) => tier.name === user.tierRank,

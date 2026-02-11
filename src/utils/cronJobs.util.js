@@ -12,6 +12,7 @@ import { startNextGameFromCron } from "../services/ARVTMCServices/ARVTMCServices
 import { UserSubmission } from "../model/userSubmission.model.js";
 import { GameQueue } from "../model/gameQueue.model.js";
 import { checkTierUpdate } from "./../controller/userSubmission.controller.js";
+import { getCycleStats } from "./cycle.util.js";
 
 const addMinutes = (start, minutes) => {
   if (!start || isNaN(start.getTime())) {
@@ -81,36 +82,10 @@ const checkAllUsersForCycleRenewal = async (io) => {
   try {
     const userSubmissions = await UserSubmission.find({});
     for (const us of userSubmissions) {
-      const combinedSubmissions = [
-        ...us.participatedTMCTargets.map((t) => ({
-          submissionTime: t.submissionTime,
-        })),
-        ...us.participatedARVTargets.map((a) => ({
-          submissionTime: a.submissionTime,
-        })),
-      ];
+      const { gamesCompleted, daysInCycle } = getCycleStats(us);
+      const shouldEndCycle = gamesCompleted >= 10 || daysInCycle >= 15;
 
-      combinedSubmissions.sort((a, b) => a.submissionTime - b.submissionTime);
-
-      const totalSubmissions = combinedSubmissions.length;
-      const cycleStartIndex = totalSubmissions - us.completedChallenges;
-      const cycleStartDate =
-        cycleStartIndex >= 0
-          ? combinedSubmissions[cycleStartIndex].submissionTime
-          : us.createdAt;
-
-      const lastActivity = us.lastChallengeDate || cycleStartDate;
-      const daysInCycle = Math.floor(
-        (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24),
-      );
-      const daysInactive = Math.floor(
-        (new Date() - lastActivity) / (1000 * 60 * 60 * 24),
-      );
-
-      if (
-        (daysInactive >= 10 && us.completedChallenges < 10) ||
-        daysInCycle >= 15
-      ) {
+      if (shouldEndCycle) {
         await checkTierUpdate(us.userId, io);
       }
     }
@@ -254,7 +229,7 @@ const manageGameLifecycle = async (io, model, gameName) => {
               }
 
               const newTotal = submission.totalPoints + points;
-              submission.totalPoints = Math.max(0, newTotal);
+              submission.totalPoints = newTotal;
               entry.points = points;
 
               await submission.save();
@@ -265,12 +240,11 @@ const manageGameLifecycle = async (io, model, gameName) => {
 
               await checkTierUpdate(submission.userId, io);
 
-              let message;
-              if (points > 0) {
-                message = `Your TMC game ${code} has been revealed! You earned ${points} points.`;
-              } else {
-                message = `Your TMC game ${code} has been revealed! You lost ${Math.abs(points)} points.`;
-              }
+              const visiblePoints = Math.max(0, points);
+              const message =
+                points > 0
+                  ? `Your TMC game ${code} has been revealed! You earned ${visiblePoints} points.`
+                  : `Your TMC game ${code} has been revealed! You earned 0 points.`;
 
               await emitNotification(io, {
                 userId: submission.userId,

@@ -6,6 +6,7 @@ import { User } from "../model/user.model.js";
 import { updateUserTier } from "./tier.controller.js";
 import { Notification } from "../model/notification.model.js";
 import { emitNotification } from "../jobs/notificationJob.js";
+import { getCycleStats } from "../utils/cycle.util.js";
 
 // P value
 const erf = (x) => {
@@ -46,6 +47,26 @@ const calculatePValue = (successfulChallenges, totalChallenges) => {
 // Cumulative standard normal probability
 const cumulativeStdNormalProbability = (z) => {
   return 0.5 * (1 + erf(z / Math.sqrt(2)));
+};
+
+const clampDisplayedPoints = (points) => {
+  const numericPoints = Number(points);
+  if (!Number.isFinite(numericPoints)) {
+    return 0;
+  }
+  return Math.max(0, numericPoints);
+};
+
+const sanitizeTargetPoints = (target) => {
+  if (!target) {
+    return target;
+  }
+
+  const plainTarget = target.toObject ? target.toObject() : target;
+  return {
+    ...plainTarget,
+    points: clampDisplayedPoints(plainTarget.points),
+  };
 };
 
 // Check if user's tier should be updated and also renew the cycle
@@ -167,38 +188,7 @@ export const checkTierUpdate = async (userId, io) => {
       return { status: false, message: "User submission not found" };
     }
 
-    const gamesCompleted = userSubmission.completedChallenges;
-
-    // Combine TMC and ARV submissions
-    const combinedSubmissions = [
-      ...userSubmission.participatedTMCTargets.map((t) => ({
-        submissionTime: t.submissionTime,
-      })),
-      ...userSubmission.participatedARVTargets.map((a) => ({
-        submissionTime: a.submissionTime,
-      })),
-    ];
-
-    // Sort by submissionTime ascending
-    combinedSubmissions.sort((a, b) => a.submissionTime - b.submissionTime);
-
-    const totalSubmissions = combinedSubmissions.length;
-
-    // Cycle start time is the submissionTime of the first in current cycle (position total - completedChallenges)
-    const cycleStartIndex =
-      totalSubmissions - userSubmission.completedChallenges;
-    const cycleStartDate =
-      cycleStartIndex >= 0
-        ? combinedSubmissions[cycleStartIndex].submissionTime
-        : userSubmission.createdAt;
-
-    const lastActivity = userSubmission.lastChallengeDate || cycleStartDate;
-    const daysInCycle = Math.floor(
-      (new Date() - cycleStartDate) / (1000 * 60 * 60 * 24),
-    );
-    const daysInactive = Math.floor(
-      (new Date() - lastActivity) / (1000 * 60 * 60 * 24),
-    );
+    const { gamesCompleted, daysInCycle } = getCycleStats(userSubmission);
 
     const shouldEndCycle = gamesCompleted >= 10 || daysInCycle >= 15;
 
@@ -223,10 +213,11 @@ export const checkTierUpdate = async (userId, io) => {
       };
     }
 
-    await emitNotification(io, {
-      userId,
-      message: `Your last cycle has ended. You scored ${updateResult.previousPoints} points. Previous tier: ${updateResult.previousTier}, New tier: ${updateResult.newTier}. A new cycle is now active.`,
-    });
+      await emitNotification(io, {
+        userId,
+        message: `Your last cycle has ended. You scored ${updateResult.previousPoints} points. Previous tier: ${updateResult.previousTier}, New tier: ${updateResult.newTier}. A new cycle is now active.`,
+      });
+    
 
     return {
       status: true,
@@ -340,8 +331,7 @@ export const submitTMCGame = async (req, res, next) => {
 
     // Update user profile using save() to ensure pre('save') runs
     const updatedUser = await User.findById(userId);
-    updatedUser.totalPoints =
-      userSubmission.totalPoints > 0 ? userSubmission.totalPoints : 0;
+    updatedUser.totalPoints = userSubmission.totalPoints;
     updatedUser.targetsLeft -= 1;
     await updatedUser.save();
 
@@ -451,11 +441,11 @@ export const submitARVGame = async (req, res, next) => {
     });
 
     userSubmission.completedChallenges += 1;
+    userSubmission.lastChallengeDate = new Date();
     await userSubmission.save();
 
     // Update user profile
-    currentUser.totalPoints =
-      userSubmission.totalPoints > 0 ? userSubmission.totalPoints : 0;
+    currentUser.totalPoints = userSubmission.totalPoints;
     currentUser.targetsLeft -= 1;
     await currentUser.save();
 
@@ -573,7 +563,7 @@ export const getPreviousTMCResults = async (req, res) => {
 
     const previousTMCResults = userSubmission.participatedTMCTargets.filter(
       (target) => target.TMCId.toString() !== currentTMCTargetId,
-    );
+    ).map(sanitizeTargetPoints);
 
     return res.status(200).json({
       status: true,
@@ -600,7 +590,7 @@ export const getPreviousARVResults = async (req, res) => {
 
     const previousARVResults = userSubmission.participatedARVTargets.filter(
       (target) => target.ARVId.toString() !== currentARVTargetId,
-    );
+    ).map(sanitizeTargetPoints);
 
     return res.status(200).json({
       status: true,
@@ -646,7 +636,7 @@ export const getTMCTargetResult = async (req, res, next) => {
     return res.status(200).json({
       status: true,
       message: "TMC Result fetched successfully",
-      data: targetResult,
+      data: sanitizeTargetPoints(targetResult),
     });
   } catch (error) {
     next(error);
@@ -690,11 +680,18 @@ export const getARVTargetResult = async (req, res, next) => {
       (target) => target.ARVId.toString() === ARVTargetId,
     );
 
+    if (!participatedTarget) {
+      return res.status(404).json({
+        status: false,
+        message: "No ARV submission found for this target.",
+      });
+    }
+
     return res.status(200).json({
       status: true,
       message: "ARV Result fetched successfully",
       data: {
-        ...participatedTarget.toObject(),
+        ...sanitizeTargetPoints(participatedTarget),
         resultImage: arvTarget.resultImage,
       },
     });
@@ -725,12 +722,20 @@ export const updateARVTargetPoints = async (req, res, next) => {
       { "participatedARVTargets.$": 1, _id: 0 },
     );
 
+    if (!result || !result.participatedARVTargets.length) {
+      return res.status(404).json({
+        status: false,
+        message: "No ARV submission found for this user and target",
+      });
+    }
+
     const length = result.participatedARVTargets.length;
 
     const { submittedImage } = result.participatedARVTargets[length - 1];
 
     // Calculate points
     points = ARV.resultImage === submittedImage ? 25 : -10;
+    const visiblePoints = clampDisplayedPoints(points);
 
     // Update points inside UserSubmission -> participatedARVTargets
     const userSubmission = await UserSubmission.findOneAndUpdate(
@@ -750,7 +755,13 @@ export const updateARVTargetPoints = async (req, res, next) => {
 
     // Update User totalPoints using save() to ensure pre('save') runs
     const updatedUser = await User.findById(userId);
-    updatedUser.totalPoints += points;
+    if (!updatedUser) {
+      return res
+        .status(404)
+        .json({ status: false, message: "User not found" });
+    }
+
+    updatedUser.totalPoints = (updatedUser.totalPoints || 0) + points;
     await updatedUser.save();
 
     // Check for tier update
@@ -759,8 +770,8 @@ export const updateARVTargetPoints = async (req, res, next) => {
     return res.status(200).json({
       status: true,
       message: "Points updated successfully",
-      points,
-      totalPoints: updatedUser.totalPoints,
+      points: visiblePoints,
+      totalPoints: clampDisplayedPoints(updatedUser.totalPoints),
       tierUpdate: tierUpdate || { changed: false },
     });
   } catch (error) {
@@ -1031,7 +1042,7 @@ export const getUserParticipationTMC = async (req, res, next) => {
 
     return res.status(200).json({
       status: true,
-      data: participatedTMCTarget,
+      data: sanitizeTargetPoints(participatedTMCTarget),
       message: "User has participated in this TMC.",
     });
   } catch (error) {
@@ -1059,7 +1070,7 @@ export const getUserParticipationARV = async (req, res, next) => {
 
     return res.status(200).json({
       status: true,
-      data: participatedARVTarget,
+      data: sanitizeTargetPoints(participatedARVTarget),
       message: "User has participated in this ARV.",
     });
   } catch (error) {

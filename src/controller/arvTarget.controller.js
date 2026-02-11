@@ -427,20 +427,21 @@ export const updateResultImage = async (req, res, next) => {
       } else {
         points = -10;
       }
+      const visiblePoints = Math.max(0, points);
 
       target.points = points;
 
-      const positivePoints = (submission.totalPoints || 0) + points;
+      const updatedPoints = (submission.totalPoints || 0) + points;
 
       // Update total points in submission
-      submission.totalPoints = positivePoints > 0 ? positivePoints : 0;
+      submission.totalPoints = updatedPoints;
       await submission.save();
 
       // Update user’s totalPoints
       const user = await User.findById(submission.userId);
       if (user) {
         const possitivePoints = user.totalPoints + points;
-        user.totalPoints = possitivePoints > 0 ? possitivePoints : 0;
+        user.totalPoints = possitivePoints;
         await user.save();
 
         // Tier check
@@ -452,17 +453,13 @@ export const updateResultImage = async (req, res, next) => {
 
       // Determine message based on points
       let message;
-      if (points >= 0) {
-        message = `Results have been published for game with target code ${game.code}. You earned ${points} points.`;
-      } else {
-        message = `Results have been published for game with target code ${game.code}. You lost ${Math.abs(points)} points.`;
-      }
+      message = `Results have been published for game with target code ${game.code}. You earned ${visiblePoints} points.`;
 
       // Emit to user
       io.to(`user_${userId}`).emit("notification", {
         message,
         targetCode: game.code,
-        points: points,
+        points: visiblePoints,
       });
 
       // Save to DB
@@ -470,7 +467,7 @@ export const updateResultImage = async (req, res, next) => {
         userId,
         message,
         targetCode: game.code,
-        points: points,
+        points: visiblePoints,
       });
     }
 
