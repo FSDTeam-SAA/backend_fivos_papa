@@ -34,7 +34,7 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
-  })
+  }),
 );
 app.use(passport.initialize());
 app.use(passport.session());
@@ -46,9 +46,9 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: "*",
+    origin: ["http://168.231.112.38:3000/", "http://localhost:3000/"],
     credentials: true,
-  })
+  }),
 );
 
 io.on("connection", (socket) => {
