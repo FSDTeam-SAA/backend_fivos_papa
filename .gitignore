@@ -20,7 +20,6 @@ yarn-error.log*
 bower_components/
 
 # IDE files
-.vscode/
 .idea/
 
 # OS-specific files
@@ -41,3 +40,8 @@ Thumbs.db
 
 # Build artifacts for Docker (if using Docker)
 docker-compose.override.yml
+config.bat
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

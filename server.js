@@ -46,7 +46,7 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: ["http://168.231.112.38:3000/", "http://localhost:3000/"],
+    origin: ["https://admin.psykick.club", "https://psykick.club"],
     credentials: true,
   }),
 );
